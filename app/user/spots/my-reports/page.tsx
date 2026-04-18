@@ -70,10 +70,19 @@ export default function MyReportsPage() {
                 <p className="text-sm">{landingPad.description}</p>
               </div>
 
-              <div>
-                <p className="text-xs text-muted-foreground">Dostęp do punktu</p>
-                <p className="text-sm">{availabilityLabels[landingPad.availability]}</p>
-              </div>
+              {landingPad.status === LandingPadStatus.REJECTED && landingPad.rejectionReason && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Powód odrzucenia</p>
+                  <p className="text-sm text-red-700">{landingPad.rejectionReason}</p>
+                </div>
+              )}
+
+              {landingPad.status !== LandingPadStatus.REJECTED && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Dostęp do punktu</p>
+                  <p className="text-sm">{availabilityLabels[landingPad.availability]}</p>
+                </div>
+              )}
             </CardContent>
 
             <CardFooter>

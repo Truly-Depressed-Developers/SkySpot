@@ -93,6 +93,13 @@ export function LandingPadDetailsDialog({ landingPad }: Props) {
                 <p>{typeLabels[landingPad.type]}</p>
               </div>
 
+              {landingPad.status === LandingPadStatus.REJECTED && landingPad.rejectionReason && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Powód odrzucenia</p>
+                  <p className="text-red-700">{landingPad.rejectionReason}</p>
+                </div>
+              )}
+
               <div>
                 <p className="text-xs text-muted-foreground">Adres punktu</p>
                 <p>{formatPointAddress(landingPad.coords.lat, landingPad.coords.lng)}</p>
