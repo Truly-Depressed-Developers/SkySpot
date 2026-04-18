@@ -13,9 +13,12 @@ model User {
   lastName  String
   email     String   @unique
   password  String
+  role      UserRole @default(USER)
   createdAt DateTime @default(now())
 
-  sessions Session[]
+  sessions           Session[]
+  orders             Order[]
+  providerDeliveries Delivery[] @relation("DeliveryProvider")
 }
 
 model Session {
@@ -25,4 +28,127 @@ model Session {
   expires      DateTime
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LandingPad {
+  id           String                 @id @default(cuid())
+  name         String
+  imageUrl     String
+  latitude     Float
+  longitude    Float
+  type         LandingPadType
+  availability LandingPadAvailability
+  status       LandingPadStatus       @default(WAITING_FOR_REVIEW)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  orders     Order[]
+  deliveries Delivery[]
+}
+
+model Order {
+  orderId              String      @id @default(cuid())
+  userId               String
+  landingPadId         String
+  type                 OrderType
+  status               OrderStatus @default(ORDERED)
+  weight               Float
+  destinationLatitude  Float
+  destinationLongitude Float
+  description          String
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  landingPad  LandingPad   @relation(fields: [landingPadId], references: [id], onDelete: Restrict)
+  delivery    Delivery?
+  droneStatus DroneStatus?
+
+  @@index([userId])
+  @@index([landingPadId])
+}
+
+model DeliveryRating {
+  id         String   @id @default(cuid())
+  deliveryId String   @unique
+  isSuccess  Boolean
+  comment    String
+  createdAt  DateTime @default(now())
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+}
+
+model Delivery {
+  id              String   @id @default(cuid())
+  orderId         String   @unique
+  droneProviderId String
+  landingPadId    String
+  droneId         String
+  reservedFrom    DateTime
+  reservedTo      DateTime
+  createdAt       DateTime @default(now())
+
+  order         Order           @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+  droneProvider User            @relation("DeliveryProvider", fields: [droneProviderId], references: [id], onDelete: Cascade)
+  landingPad    LandingPad      @relation(fields: [landingPadId], references: [id], onDelete: Cascade)
+  rating        DeliveryRating?
+
+  @@index([landingPadId, reservedFrom, reservedTo])
+  @@index([droneProviderId])
+}
+
+model DroneStatus {
+  droneId              String   @id
+  currentLatitude      Float
+  currentLongitude     Float
+  batteryLevel         Int
+  originLatitude       Float
+  originLongitude      Float
+  destinationLatitude  Float
+  destinationLongitude Float
+  orderId              String   @unique
+  updatedAt            DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  DRONE_PROVIDER
+}
+
+enum LandingPadType {
+  DRIVEWAY
+  SQUARE
+  PARCEL_LOCKER_ROOF
+  HOUSE_ROOF
+  OTHER
+}
+
+enum LandingPadAvailability {
+  PRIVATE
+  PUBLIC
+}
+
+enum LandingPadStatus {
+  WAITING_FOR_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+enum OrderType {
+  STANDARD
+  FOOD
+  EMERGENCY_AED
+  MONITORING
+  BLOOD
+}
+
+enum OrderStatus {
+  ORDERED
+  PREPARING
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
 }

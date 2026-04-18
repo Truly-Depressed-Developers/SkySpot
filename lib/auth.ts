@@ -4,6 +4,7 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import NextAuth from 'next-auth';
 import bcryptjs from 'bcryptjs';
+import { UserRole } from '@prisma/client';
 import { prisma } from '@/prisma/prisma';
 
 export type HashedPassword = string & { __hashedPasswordBrand: true };
@@ -39,6 +40,7 @@ export const authOptions: AuthOptions = {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
+          role: user.role,
         };
       },
     }),
@@ -49,6 +51,7 @@ export const authOptions: AuthOptions = {
         token.id = user.id;
         token.firstName = user.firstName;
         token.lastName = user.lastName;
+        token.role = user.role ?? UserRole.USER;
       }
       return token;
     },
@@ -56,6 +59,7 @@ export const authOptions: AuthOptions = {
       session.user.id = token.id;
       session.user.firstName = token.firstName;
       session.user.lastName = token.lastName;
+      session.user.role = token.role;
       return session;
     },
   },

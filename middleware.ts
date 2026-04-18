@@ -1,5 +1,6 @@
 import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
+import { canAccessPath, isPublicPath, isUserRole } from '@/lib/appAccess';
 
 export default withAuth(
   function middleware(req) {
@@ -10,17 +11,23 @@ export default withAuth(
       authorized: ({ token, req }) => {
         const pathname = req.nextUrl.pathname;
 
-        const publicPaths = ['/guest', '/auth/signin', '/auth/register'];
-
-        if (publicPaths.some((path) => pathname.startsWith(path))) {
+        if (isPublicPath(pathname)) {
           return true;
         }
 
-        return !!token;
+        if (!token) {
+          return false;
+        }
+
+        if (!isUserRole(token.role)) {
+          return false;
+        }
+
+        return canAccessPath(pathname, token.role);
       },
     },
     pages: {
-      signIn: '/guest',
+      signIn: '/auth/signin',
     },
   },
 );

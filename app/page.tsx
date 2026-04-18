@@ -1,6 +1,7 @@
 'use client';
 
-import { baseConfig } from '@/lib/baseConfig';
+import { roleDefaultPaths } from '@/lib/appAccess';
+import { UserRole } from '@prisma/client';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -12,7 +13,17 @@ export default function HomePage() {
   useEffect(() => {
     if (status === 'loading') return;
 
-    router.replace(baseConfig.accountDefaultSites[baseConfig.accountType]);
+    if (!session?.user) {
+      router.replace('/auth/signin');
+      return;
+    }
+
+    if (session.user.role in roleDefaultPaths) {
+      router.replace(roleDefaultPaths[session.user.role]);
+      return;
+    }
+
+    router.replace(roleDefaultPaths[UserRole.USER]);
   }, [session, status, router]);
 
   return (

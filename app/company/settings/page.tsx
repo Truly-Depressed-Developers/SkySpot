@@ -1,19 +1,32 @@
 'use client';
 
 import { PageHeader } from '@/components/PageHeader';
+import { trpc } from '@/trpc/client';
+import { UserRole } from '@prisma/client';
+import { useSession } from 'next-auth/react';
 
 export default function CompanySettingsPage() {
+  const { data: session } = useSession();
+  const isProvider = session?.user?.role === UserRole.DRONE_PROVIDER;
+  const deliveriesQuery = trpc.delivery.getAll.useQuery(undefined, {
+    enabled: isProvider,
+  });
+
   return (
     <div className="flex min-h-full flex-col bg-background p-4 pt-0">
       <PageHeader title="Integracja / API" />
-      <main className="flex-1 p-4">
-        <div className="bg-muted p-6 rounded-lg border">
-          <h3 className="font-bold mb-2">Twoje klucze API</h3>
-          <p className="text-sm text-muted-foreground mb-4">Użyj tych kluczy do autoryzacji swojego systemu dronowego.</p>
-          <div className="bg-background p-2 rounded border font-mono text-xs overflow-x-auto">
-            sk_test_51Mz...
-          </div>
-        </div>
+      <main className="flex-1 p-4 space-y-4">
+        {!isProvider && (
+          <p className="text-sm text-muted-foreground">Ta podstrona jest dostępna tylko dla providera dronów.</p>
+        )}
+
+        {isProvider && (
+          <section className="rounded-lg border p-4">
+            <h2 className="font-semibold">Podstawowe dane integracyjne</h2>
+            <p className="text-sm text-muted-foreground">Rola: {session.user.role}</p>
+            <p className="text-sm text-muted-foreground">Liczba dostaw providera: {deliveriesQuery.data?.length ?? 0}</p>
+          </section>
+        )}
       </main>
     </div>
   );

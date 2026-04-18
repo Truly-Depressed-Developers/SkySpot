@@ -1,4 +1,5 @@
 import { prisma } from '@/prisma/prisma';
+import { mapUserToDTO } from '@/types/dtos';
 import { protectedProcedure, publicProcedure, router } from '../init';
 import z from 'zod';
 import bcrypt from 'bcryptjs';
@@ -39,13 +40,16 @@ export const userRouter = router({
         },
       });
 
-      return {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-      };
+      return mapUserToDTO(user);
     }),
+
+  getAll: publicProcedure.query(async () => {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return users.map(mapUserToDTO);
+  }),
 
   changePassword: protectedProcedure
     .input(

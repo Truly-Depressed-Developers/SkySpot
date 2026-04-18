@@ -1,6 +1,4 @@
-import { User } from '@prisma/client';
-
-export type UserRole = 'USER' | 'MODERATOR' | 'DRONE_PROVIDER';
+import type { User, UserRole } from '@prisma/client';
 
 export type UserDTO = {
   id: string;
@@ -15,5 +13,5 @@ export const mapUserToDTO = (user: User): UserDTO => ({
   firstName: user.firstName,
   lastName: user.lastName,
   email: user.email,
-  role: UserRole.USER, // TODO change when added to prisma schema
+  role: user.role,
 });

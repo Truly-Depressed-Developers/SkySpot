@@ -1,8 +1,7 @@
-export type LandingPadType = 'DRIVEWAY' | 'SQUARE' | 'PARCEL_LOCKER_ROOF' | 'HOUSE_ROOF' | 'OTHER';
-
-export type LandingPadAvailability = 'PRIVATE' | 'PUBLIC';
-
-export type LandingPadStatus = 'WAITING_FOR_REVIEW' | 'ACCEPTED' | 'REJECTED';
+import type { LandingPadAvailability, LandingPadStatus, LandingPadType } from '@prisma/client';
+import type { Delivery, LandingPad } from '@prisma/client';
+import type { CoordsDTO } from './common';
+import { mapCoordsToDTO } from './common';
 
 export type LandingPadDetailsDTO = {
   id: string;
@@ -33,8 +32,46 @@ export type CreateLandingPadDTO = {
 export type LandingPadReservationDTO = {
   id: string;
   landingPadId: string;
-  userId: string;
+  droneProviderId: string;
   droneId: string;
   reservedFrom: Date;
   reservedTo: Date;
 };
+
+type LandingPadWithDeliveries = LandingPad & {
+  deliveries: Delivery[];
+};
+
+export const mapDeliveryToLandingPadReservationDTO = (
+  delivery: Delivery,
+): LandingPadReservationDTO => ({
+  id: delivery.id,
+  landingPadId: delivery.landingPadId,
+  droneProviderId: delivery.droneProviderId,
+  droneId: delivery.droneId,
+  reservedFrom: delivery.reservedFrom,
+  reservedTo: delivery.reservedTo,
+});
+
+export const mapLandingPadToDetailsDTO = (
+  landingPad: LandingPadWithDeliveries,
+): LandingPadDetailsDTO => ({
+  id: landingPad.id,
+  name: landingPad.name,
+  coords: mapCoordsToDTO(landingPad.latitude, landingPad.longitude),
+  imageUrl: landingPad.imageUrl,
+  type: landingPad.type,
+  availability: landingPad.availability,
+  status: landingPad.status,
+  reservations: landingPad.deliveries.map(mapDeliveryToLandingPadReservationDTO),
+});
+
+export const mapLandingPadToWithDistanceDTO = (
+  landingPad: LandingPad,
+  distance: number,
+): LandingPadWithDistanceDTO => ({
+  id: landingPad.id,
+  name: landingPad.name,
+  coords: mapCoordsToDTO(landingPad.latitude, landingPad.longitude),
+  distance,
+});

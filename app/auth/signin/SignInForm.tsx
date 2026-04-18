@@ -19,6 +19,30 @@ const signInSchema = z.object({
 
 type SignInFormData = z.infer<typeof signInSchema>;
 
+type QuickLoginOption = {
+  label: string;
+  email: string;
+  password: string;
+};
+
+const quickLoginOptions: QuickLoginOption[] = [
+  {
+    label: 'Szybkie logowanie: User',
+    email: 'jan@mail.com',
+    password: 'password123',
+  },
+  {
+    label: 'Szybkie logowanie: Moderator',
+    email: 'mod@mail.com',
+    password: 'password123',
+  },
+  {
+    label: 'Szybkie logowanie: Provider',
+    email: 'provider1@mail.com',
+    password: 'password123',
+  },
+];
+
 export function SignInForm() {
   const router = useRouter();
 
@@ -50,6 +74,12 @@ export function SignInForm() {
     } catch (error) {
       toast.error('Wystąpił błąd podczas logowania');
     }
+  };
+
+  const handleQuickLogin = async (option: QuickLoginOption) => {
+    form.setValue('email', option.email, { shouldValidate: true });
+    form.setValue('password', option.password, { shouldValidate: true });
+    await onSubmit({ email: option.email, password: option.password });
   };
 
   return (
@@ -104,6 +134,23 @@ export function SignInForm() {
           <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? 'Logowanie...' : 'Zaloguj się'}
           </Button>
+
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Szybkie logowanie (konta seedowe)</p>
+            {quickLoginOptions.map((option) => (
+              <Button
+                key={option.email}
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={form.formState.isSubmitting}
+                onClick={() => handleQuickLogin(option)}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+
           <p className="text-center text-sm text-muted-foreground">
             Nie masz konta?{' '}
             <Link href="/auth/register" className="font-medium text-primary hover:underline">

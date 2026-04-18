@@ -15,6 +15,7 @@ export const createContext = async () => {
       email: session.user.email,
       firstName: session.user.firstName,
       lastName: session.user.lastName,
+      role: session.user.role,
     },
   };
 };
