@@ -1,10 +1,10 @@
-import { LandingPadAvailability, LandingPadType } from '@prisma/client';
+import { LandingPadAvailability, LandingPadStatus, LandingPadType } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '@/prisma/prisma';
 import { mapLandingPadToDetailsDTO } from '@/types/dtos';
 
-import { publicProcedure, router, userProcedure } from '../init';
+import { moderatorProcedure, publicProcedure, router, userProcedure } from '../init';
 
 const createLandingPadSchema = z.object({
   name: z.string().min(1, 'Nazwa punktu jest wymagana'),
@@ -16,6 +16,10 @@ const createLandingPadSchema = z.object({
   }),
   type: z.enum(LandingPadType),
   availability: z.enum(LandingPadAvailability),
+});
+
+const updateLandingPadSchema = createLandingPadSchema.extend({
+  id: z.string(),
 });
 
 export const landingPadRouter = router({
@@ -46,6 +50,36 @@ export const landingPadRouter = router({
       },
     });
 
+    return mapLandingPadToDetailsDTO(landingPad);
+  }),
+
+  updateStatus: moderatorProcedure
+    .input(z.object({ id: z.string(), status: z.enum(LandingPadStatus) }))
+    .mutation(async ({ input }) => {
+      const landingPad = await prisma.landingPad.update({
+        where: { id: input.id },
+        data: { status: input.status },
+        include: { deliveries: true },
+      });
+      return mapLandingPadToDetailsDTO(landingPad);
+    }),
+
+  update: moderatorProcedure.input(updateLandingPadSchema).mutation(async ({ input }) => {
+    const landingPad = await prisma.landingPad.update({
+      where: { id: input.id },
+      data: {
+        name: input.name,
+        description: input.description,
+        imageUrl: input.imageUrl,
+        latitude: input.coords.lat,
+        longitude: input.coords.lng,
+        type: input.type,
+        availability: input.availability,
+      },
+      include: {
+        deliveries: true,
+      },
+    });
     return mapLandingPadToDetailsDTO(landingPad);
   }),
 });

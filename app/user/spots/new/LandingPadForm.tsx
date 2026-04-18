@@ -158,7 +158,7 @@ function CoordinatesPicker({
 
         <div className="space-y-4">
           <div className="h-80 overflow-hidden rounded-lg border">
-            <Map center={mapCenter}>
+            <Map center={mapCenter} className="h-full min-h-0!">
               <MapLayers defaultTileLayer="Jasna" defaultLayerGroups={[]}>
                 <BaseLayers />
 
