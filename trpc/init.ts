@@ -1,4 +1,5 @@
 import { initTRPC, TRPCError } from '@trpc/server';
+import { UserRole } from '@prisma/client';
 import superjson from 'superjson';
 import { Context } from './context';
 
@@ -25,3 +26,22 @@ export const protectedProcedure = t.procedure.use(async (opts) => {
     },
   });
 });
+
+const roleProcedure = (allowedRoles: UserRole[]) =>
+  protectedProcedure.use(async (opts) => {
+    const { ctx, next } = opts;
+
+    if (!allowedRoles.includes(ctx.user.role)) {
+      throw new TRPCError({ code: 'FORBIDDEN' });
+    }
+
+    return next({
+      ctx: {
+        user: ctx.user,
+      },
+    });
+  });
+
+export const userProcedure = roleProcedure([UserRole.USER]);
+export const providerProcedure = roleProcedure([UserRole.DRONE_PROVIDER]);
+export const moderatorProcedure = roleProcedure([UserRole.MODERATOR]);

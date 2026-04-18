@@ -1,3 +1,5 @@
+import type { Delivery } from '@prisma/client';
+
 export type DeliveryRatingDTO = {
   deliveryId: string;
   isSuccess: boolean;
@@ -15,3 +17,13 @@ export type DeliveryDTO = {
 };
 
 export type DeliveryDeclarationDTO = Omit<DeliveryDTO, 'id'>;
+
+export const mapDeliveryToDTO = (delivery: Delivery): DeliveryDTO => ({
+  id: delivery.id,
+  orderId: delivery.orderId,
+  droneProviderId: delivery.droneProviderId,
+  landingPadId: delivery.landingPadId,
+  droneId: delivery.droneId,
+  reservedFrom: delivery.reservedFrom,
+  reservedTo: delivery.reservedTo,
+});
