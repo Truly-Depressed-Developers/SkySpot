@@ -4,6 +4,7 @@ import { navItemsConfig } from '@/lib/appAccess';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import { LayoutDashboard } from 'lucide-react';
 import {
   MapTrifoldIcon,
   UserIcon,
@@ -15,6 +16,7 @@ import {
 import { useNavbar } from '@/hooks/useNavbar';
 
 const navIconsByHref: Record<string, React.ReactNode> = {
+  '/dashboard': <LayoutDashboard size={24} />,
   '/map': <MapTrifoldIcon size={24} weight="fill" />,
   '/user/spots': <MapPinIcon size={24} weight="fill" />,
   '/user/orders': <PackageIcon size={24} weight="fill" />,

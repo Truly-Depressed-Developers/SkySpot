@@ -8,6 +8,7 @@ export type LandingPadDetailsDTO = {
   name: string;
   description: string;
   rejectionReason: string;
+  ownerId: string | null;
   coords: CoordsDTO;
   imageUrl: string;
   type: LandingPadType;
@@ -42,6 +43,7 @@ export type LandingPadReservationDTO = {
 };
 
 type LandingPadWithDeliveries = LandingPad & {
+  ownerId?: string | null;
   deliveries: Delivery[];
 };
 
@@ -63,6 +65,7 @@ export const mapLandingPadToDetailsDTO = (
   name: landingPad.name,
   description: landingPad.description,
   rejectionReason: landingPad.rejectionReason ?? '',
+  ownerId: landingPad.ownerId ?? null,
   coords: mapCoordsToDTO(landingPad.latitude, landingPad.longitude),
   imageUrl: landingPad.imageUrl,
   type: landingPad.type,

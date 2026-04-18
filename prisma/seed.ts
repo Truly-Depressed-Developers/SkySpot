@@ -78,6 +78,7 @@ async function main() {
     data: [
       {
         id: 'lp-centrum',
+        ownerId: regularUser1.id,
         name: 'Lądowisko Rynek Główny',
         description: 'Centralny punkt odbioru przy rynku.',
         imageUrl: 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6',
@@ -89,6 +90,7 @@ async function main() {
       },
       {
         id: 'lp-agh',
+        ownerId: regularUser1.id,
         name: 'Lądowisko AGH',
         description: 'Punkt odbioru po zachodniej stronie miasta.',
         imageUrl: 'https://images.unsplash.com/photo-1470115636492-6d2b56f9146d',
@@ -100,6 +102,7 @@ async function main() {
       },
       {
         id: 'lp-prywatne-1',
+        ownerId: regularUser2.id,
         name: 'Lądowisko Osiedle Podwawelskie',
         description: 'Prywatny punkt na osiedlu z ograniczonym dostępem.',
         rejectionReason:
@@ -113,6 +116,7 @@ async function main() {
       },
       {
         id: 'lp-kazimierz-oczekujace',
+        ownerId: regularUser1.id,
         name: 'Lądowisko Kazimierz',
         description: 'Nowy punkt zgłoszony do weryfikacji przy bulwarach.',
         imageUrl: 'https://images.unsplash.com/photo-1494526585095-c41746248156',
@@ -121,6 +125,19 @@ async function main() {
         type: 'SQUARE',
         availability: 'PUBLIC',
         status: 'WAITING_FOR_REVIEW',
+      },
+      {
+        id: 'lp-kleparz-odrzucone',
+        ownerId: regularUser1.id,
+        name: 'Lądowisko Kleparz',
+        description: 'Zgłoszenie z odrzuconą lokalizacją testową.',
+        rejectionReason: 'Zbyt mało miejsca na bezpieczne lądowanie i zbyt duże ryzyko kolizji.',
+        imageUrl: 'https://images.unsplash.com/photo-1493238792000-8113da705763',
+        latitude: 50.0712,
+        longitude: 19.9441,
+        type: 'HOUSE_ROOF',
+        availability: 'PRIVATE',
+        status: 'REJECTED',
       },
     ],
   });
