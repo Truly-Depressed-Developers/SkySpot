@@ -1,6 +1,6 @@
 'use client';
 
-import { baseConfig } from '@/lib/baseConfig';
+import { UserRole } from '@prisma/client';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -12,7 +12,22 @@ export default function HomePage() {
   useEffect(() => {
     if (status === 'loading') return;
 
-    router.replace(baseConfig.accountDefaultSites[baseConfig.accountType]);
+    if (!session?.user) {
+      router.replace('/guest');
+      return;
+    }
+
+    if (session.user.role === UserRole.DRONE_PROVIDER) {
+      router.replace('/company/orders');
+      return;
+    }
+
+    if (session.user.role === UserRole.MODERATOR) {
+      router.replace('/moderator/approvals');
+      return;
+    }
+
+    router.replace('/map');
   }, [session, status, router]);
 
   return (

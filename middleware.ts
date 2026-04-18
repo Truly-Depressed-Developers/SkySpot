@@ -1,5 +1,6 @@
 import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
+import { UserRole } from '@prisma/client';
 
 export default withAuth(
   function middleware(req) {
@@ -16,7 +17,29 @@ export default withAuth(
           return true;
         }
 
-        return !!token;
+        if (!token) {
+          return false;
+        }
+
+        const role = token.role;
+
+        if (pathname.startsWith('/user')) {
+          return role === UserRole.USER;
+        }
+
+        if (pathname.startsWith('/company')) {
+          return role === UserRole.DRONE_PROVIDER;
+        }
+
+        if (pathname.startsWith('/moderator')) {
+          return role === UserRole.MODERATOR;
+        }
+
+        if (pathname.startsWith('/map')) {
+          return role === UserRole.USER || role === UserRole.DRONE_PROVIDER;
+        }
+
+        return true;
       },
     },
     pages: {

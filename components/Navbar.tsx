@@ -2,23 +2,23 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
   MapTrifoldIcon,
   UserIcon,
   MapPinIcon,
   PackageIcon,
-  BuildingsIcon,
   ShieldCheckIcon,
   GearIcon
 } from '@phosphor-icons/react';
 import { useNavbar } from '@/hooks/useNavbar';
-import { AccountType, baseConfig } from '@/lib/baseConfig';
+import { UserRole } from '@prisma/client';
 
 type NavItem = {
   href: string;
   label: string;
   icon: React.ReactNode;
-  roles: AccountType[];
+  roles: UserRole[];
 };
 
 const navItems: NavItem[] = [
@@ -26,47 +26,48 @@ const navItems: NavItem[] = [
     href: '/map',
     label: 'Mapa',
     icon: <MapTrifoldIcon size={24} weight="fill" />,
-    roles: ['user', 'company'],
+    roles: [UserRole.USER, UserRole.DRONE_PROVIDER],
   },
   {
     href: '/user/spots',
     label: 'Miejsca',
     icon: <MapPinIcon size={24} weight="fill" />,
-    roles: ['user'],
+    roles: [UserRole.USER],
   },
   {
     href: '/user/orders',
     label: 'Paczki',
     icon: <PackageIcon size={24} weight="fill" />,
-    roles: ['user'],
+    roles: [UserRole.USER],
   },
   {
     href: '/company/orders',
     label: 'Zlecenia',
     icon: <PackageIcon size={24} weight="fill" />,
-    roles: ['company'],
+    roles: [UserRole.DRONE_PROVIDER],
   },
   {
     href: '/company/settings',
     label: 'API',
     icon: <GearIcon size={24} weight="fill" />,
-    roles: ['company'],
+    roles: [UserRole.DRONE_PROVIDER],
   },
   {
     href: '/moderator/approvals',
     label: 'Akceptacja',
     icon: <ShieldCheckIcon size={24} weight="fill" />,
-    roles: ['moderator'],
+    roles: [UserRole.MODERATOR],
   },
   {
     href: '/profile',
     label: 'Profil',
     icon: <UserIcon size={24} weight="fill" />,
-    roles: ['user', 'company', 'moderator'],
+    roles: [UserRole.USER, UserRole.DRONE_PROVIDER, UserRole.MODERATOR],
   },
 ];
 
 export function Navbar() {
+  const { data: session } = useSession();
   const pathname = usePathname();
   const { isVisible } = useNavbar();
 
@@ -79,9 +80,12 @@ export function Navbar() {
     return null;
   }
 
-  const filteredNavItems = navItems.filter((item) =>
-    item.roles.includes(baseConfig.accountType)
-  );
+  const filteredNavItems = navItems.filter((item) => {
+    if (!session?.user?.role) {
+      return false;
+    }
+    return item.roles.includes(session.user.role);
+  });
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 border-t bg-background md:hidden z-50">

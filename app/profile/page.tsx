@@ -42,6 +42,7 @@ export default function ProfilePage() {
             <span className="text-sm text-muted-foreground">
               {session.user.firstName} {session.user.lastName}
             </span>
+            <span className="text-sm text-muted-foreground">Rola: {session.user.role}</span>
             <Button variant="destructive" size="sm" onClick={() => signOut({ callbackUrl: '/' })}>
               Logout
             </Button>
