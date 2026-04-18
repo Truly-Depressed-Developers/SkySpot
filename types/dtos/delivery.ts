@@ -1,13 +1,17 @@
 export type DeliveryRatingDTO = {
-  orderId: string;
+  deliveryId: string;
   isSuccess: boolean;
   comment: string;
 };
 
-export type DeliveryDeclarationDTO = {
+export type DeliveryDTO = {
+  id: string;
   orderId: string;
+  droneProviderId: string;
   landingPadId: string;
   droneId: string;
   reservedFrom: Date;
   reservedTo: Date;
 };
+
+export type DeliveryDeclarationDTO = Omit<DeliveryDTO, 'id'>;

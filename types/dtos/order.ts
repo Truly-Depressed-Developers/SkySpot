@@ -1,9 +1,10 @@
-export type OrderType = 'STANDARD' | 'FOOD' | 'EMERGENCY_AED' | 'MONITORING' | 'BLOOD';
-
-export type OrderStatus = 'ORDERED' | 'PREPARING' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+import type { OrderStatus, OrderType } from '@prisma/client';
+import type { CoordsDTO } from './common';
 
 export type OrderDTO = {
   orderId: string;
+  userId: string;
+  landingPadId: string;
   type: OrderType;
   weight: number;
   status: OrderStatus;

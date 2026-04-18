@@ -1,8 +1,5 @@
-export type LandingPadType = 'DRIVEWAY' | 'SQUARE' | 'PARCEL_LOCKER_ROOF' | 'HOUSE_ROOF' | 'OTHER';
-
-export type LandingPadAvailability = 'PRIVATE' | 'PUBLIC';
-
-export type LandingPadStatus = 'WAITING_FOR_REVIEW' | 'ACCEPTED' | 'REJECTED';
+import type { LandingPadAvailability, LandingPadStatus, LandingPadType } from '@prisma/client';
+import type { CoordsDTO } from './common';
 
 export type LandingPadDetailsDTO = {
   id: string;
@@ -33,7 +30,7 @@ export type CreateLandingPadDTO = {
 export type LandingPadReservationDTO = {
   id: string;
   landingPadId: string;
-  userId: string;
+  droneProviderId: string;
   droneId: string;
   reservedFrom: Date;
   reservedTo: Date;
