@@ -11,18 +11,18 @@ import { z } from 'zod';
 import { MapPinIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 
 import { PageHeaderWithBack } from '@/components/FormHeader';
+import { BaseLayers } from '@/components/map/BaseLayers';
+import { KRAKOW_COORDINATES } from '@/components/map/mapConfig';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
-import { Map, MapLayers, MapMarker, MapTileLayer, MapZoomControl } from '@/components/ui/map';
+import { Map, MapLayerGroup, MapLayers, MapLayersControl, MapMarker, MapZoomControl } from '@/components/ui/map';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { trpc } from '@/trpc/client';
 import type { CoordsDTO } from '@/types/dtos';
-
-const KRAKOW_COORDINATES: CoordsDTO = { lat: 50.065406, lng: 19.937587 };
 
 const landingPadTypeLabels: Record<LandingPadType, string> = {
   [LandingPadType.DRIVEWAY]: 'Podjazd',
@@ -156,24 +156,22 @@ function CoordinatesPicker({
         <div className="space-y-4">
           <div className="h-80 overflow-hidden rounded-lg border">
             <Map center={mapCenter}>
-              <MapLayers defaultTileLayer="Jasna">
-                <MapTileLayer
-                  name="Jasna"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution="&copy; OpenStreetMap contributors"
+              <MapLayers defaultTileLayer="Jasna" defaultLayerGroups={['Wybrany punkt']}>
+                <BaseLayers />
+                <MapLayerGroup name="Wybrany punkt">
+                  <MapClickHandler
+                    onSelect={(coords) => {
+                      setDraft(coords);
+                      setMapCenter(coords);
+                    }}
+                  />
+                  {draft && <MapMarker position={draft} />}
+                </MapLayerGroup>
+                <MapLayersControl
+                  position="top-1 left-1"
+                  tileLayersLabel="Widok mapy"
+                  layerGroupsLabel="Warstwy"
                 />
-                <MapTileLayer
-                  name="Satelita"
-                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                  attribution="Tiles &copy; Esri"
-                />
-                <MapClickHandler
-                  onSelect={(coords) => {
-                    setDraft(coords);
-                    setMapCenter(coords);
-                  }}
-                />
-                {draft && <MapMarker position={draft} />}
               </MapLayers>
               <MapZoomControl position="top-1 right-1" />
             </Map>

@@ -9,13 +9,11 @@ import {
   MapLayerGroup,
 } from '@/components/ui/map';
 import { trpc } from '@/trpc/client';
-import { LatLngExpression } from 'leaflet';
 import { Badge } from '@/components/ui/badge';
 import { LandingPadMarker } from '@/components/map/LandingPadMarker';
 import { DroneMarker } from '@/components/map/DroneMarker';
 import { BaseLayers } from '@/components/map/BaseLayers';
-
-const KRAKOW_COORDINATES = [50.065406, 19.937587] satisfies LatLngExpression;
+import { KRAKOW_COORDINATES } from '@/components/map/mapConfig';
 
 export default function MapPage() {
   const { data: landingPads, isLoading: isLoadingPads } = trpc.landingPad.getAll.useQuery();
