@@ -18,7 +18,7 @@ import { KRAKOW_COORDINATES } from '@/components/map/mapConfig';
 export default function MapPage() {
   const { data: landingPads, isLoading: isLoadingPads } = trpc.landingPad.getAll.useQuery();
   const { data: drones, isLoading: isLoadingDrones } = trpc.droneStatus.getAllMine.useQuery(undefined, {
-    refetchInterval: 5000,
+    refetchInterval: 1000, // Odświeżaj co sekundę dla idealnej płynności ruchu
   });
 
   const isLoading = isLoadingPads || isLoadingDrones;
