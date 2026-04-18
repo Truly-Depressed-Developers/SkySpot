@@ -1,5 +1,5 @@
 import { prisma } from '@/prisma/prisma';
-import { mapOrderToDTO } from '@/types/dtos';
+import { mapOrderToUserOrderDTO } from '@/types/dtos';
 import { router, userProcedure } from '../init';
 
 export const userOrderRouter = router({
@@ -7,8 +7,11 @@ export const userOrderRouter = router({
     const orders = await prisma.order.findMany({
       where: { userId: ctx.user.id },
       orderBy: { createdAt: 'desc' },
+      include: {
+        delivery: true,
+      },
     });
 
-    return orders.map(mapOrderToDTO);
+    return orders.map(mapOrderToUserOrderDTO);
   }),
 });
