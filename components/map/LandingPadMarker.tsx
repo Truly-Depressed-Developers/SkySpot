@@ -28,7 +28,7 @@ interface LandingPadMarkerProps {
 export function LandingPadMarker({ pad }: LandingPadMarkerProps) {
   return (
     <MapMarker
-      position={[pad.coords.latitude, pad.coords.longitude]}
+      position={pad.coords}
       icon={<MapPinIcon className="size-6 text-primary fill-primary/20" />}
     >
       <MapPopup>

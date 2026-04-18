@@ -46,7 +46,7 @@ export function Navbar() {
   });
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 border-t bg-background md:hidden z-50">
+    <nav className="fixed bottom-0 left-0 right-0 border-t bg-background z-50">
       <div className="flex justify-around items-end">
         {filteredNavItems.map((item) => {
           const active = isActive(item.href);

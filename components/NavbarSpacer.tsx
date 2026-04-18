@@ -7,5 +7,5 @@ export function NavbarSpacer() {
 
   if (!isVisible) return null;
 
-  return <div className="h-20 md:h-0" />;
+  return <div className="h-20" />;
 }

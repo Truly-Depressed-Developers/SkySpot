@@ -6,6 +6,7 @@ import { mapCoordsToDTO } from './common';
 export type LandingPadDetailsDTO = {
   id: string;
   name: string;
+  description: string;
   coords: CoordsDTO;
   imageUrl: string;
   type: LandingPadType;
@@ -23,6 +24,7 @@ export type LandingPadWithDistanceDTO = {
 
 export type CreateLandingPadDTO = {
   name: string;
+  description: string;
   imageUrl: string;
   coords: CoordsDTO;
   type: LandingPadType;
@@ -58,6 +60,7 @@ export const mapLandingPadToDetailsDTO = (
 ): LandingPadDetailsDTO => ({
   id: landingPad.id,
   name: landingPad.name,
+  description: landingPad.description,
   coords: mapCoordsToDTO(landingPad.latitude, landingPad.longitude),
   imageUrl: landingPad.imageUrl,
   type: landingPad.type,
