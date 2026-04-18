@@ -20,6 +20,7 @@ export type UserOrderDTO = {
   status: OrderStatus;
   packageName: string;
   packageSize: OrderPackageSizeLabel;
+  weight: number;
   trackingNumber: string;
   deliveryAt: Date;
   etaMinutes: number | null;
@@ -73,6 +74,7 @@ export const mapOrderToUserOrderDTO = (order: OrderWithDelivery): UserOrderDTO =
     status: order.status,
     packageName: order.description,
     packageSize: getPackageSizeLabel(order.weight),
+    weight: order.weight,
     trackingNumber: order.orderId,
     deliveryAt,
     etaMinutes,

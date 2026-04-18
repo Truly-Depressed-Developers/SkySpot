@@ -4,8 +4,9 @@ import { useMemo } from 'react';
 import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { OrderDetailsDialog } from '@/components/order/OrderDetailsDialog';
 import { trpc } from '@/trpc/client';
 import { OrderStatus, UserRole } from '@prisma/client';
 import { useSession } from 'next-auth/react';
@@ -49,6 +50,14 @@ export default function UserOrdersPage() {
   const myOrdersQuery = trpc.userOrder.getMine.useQuery(undefined, {
     enabled: isUser,
   });
+  const myDroneStatusesQuery = trpc.droneStatus.getAllMine.useQuery(undefined, {
+    enabled: isUser,
+  });
+
+  const droneStatusesByOrderId = useMemo(
+    () => new Map((myDroneStatusesQuery.data ?? []).map((droneStatus) => [droneStatus.orderId, droneStatus])),
+    [myDroneStatusesQuery.data],
+  );
 
   const activeOrders = useMemo(
     () => myOrdersQuery.data?.filter((order) => activeStatuses.has(order.status)) ?? [],
@@ -76,7 +85,7 @@ export default function UserOrdersPage() {
           </Badge>
         </CardHeader>
 
-        <CardContent className="space-y-4 pt-4">
+        <CardContent className="space-y-4 pt-4 pb-4">
           <div>
             <p className="text-xs text-muted-foreground">Nazwa paczki</p>
             <p className="text-sm font-medium">{order.packageName}</p>
@@ -110,6 +119,13 @@ export default function UserOrdersPage() {
             </div>
           </div>
         </CardContent>
+
+        <CardFooter className="justify-end border-t pt-4">
+          <OrderDetailsDialog
+            order={order}
+            droneStatus={droneStatusesByOrderId.get(order.orderId)}
+          />
+        </CardFooter>
       </Card>
     );
   };
