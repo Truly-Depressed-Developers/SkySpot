@@ -18,8 +18,9 @@ model User {
 
   sessions           Session[]
   orders             Order[]
-  providerDeliveries Delivery[]   @relation("DeliveryProvider")
+  providerDeliveries Delivery[]      @relation("DeliveryProvider")
   landingPads        LandingPad[]
+  companyApiKeys     CompanyApiKey[]
 }
 
 model Session {
@@ -49,6 +50,21 @@ model LandingPad {
   owner      User?      @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   orders     Order[]
   deliveries Delivery[]
+}
+
+model CompanyApiKey {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  secretHash      String   @unique
+  encryptedSecret String
+  secretPrefix    String
+  secretLast4     String
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model Order {
