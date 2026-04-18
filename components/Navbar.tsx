@@ -1,5 +1,6 @@
 'use client';
 
+import { navItemsConfig } from '@/lib/appAccess';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -12,59 +13,16 @@ import {
   GearIcon
 } from '@phosphor-icons/react';
 import { useNavbar } from '@/hooks/useNavbar';
-import { UserRole } from '@prisma/client';
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
-  roles: UserRole[];
+const navIconsByHref: Record<string, React.ReactNode> = {
+  '/map': <MapTrifoldIcon size={24} weight="fill" />,
+  '/user/spots': <MapPinIcon size={24} weight="fill" />,
+  '/user/orders': <PackageIcon size={24} weight="fill" />,
+  '/company/orders': <PackageIcon size={24} weight="fill" />,
+  '/company/settings': <GearIcon size={24} weight="fill" />,
+  '/moderator/approvals': <ShieldCheckIcon size={24} weight="fill" />,
+  '/profile': <UserIcon size={24} weight="fill" />,
 };
-
-const navItems: NavItem[] = [
-  {
-    href: '/map',
-    label: 'Mapa',
-    icon: <MapTrifoldIcon size={24} weight="fill" />,
-    roles: [UserRole.USER, UserRole.DRONE_PROVIDER],
-  },
-  {
-    href: '/user/spots',
-    label: 'Miejsca',
-    icon: <MapPinIcon size={24} weight="fill" />,
-    roles: [UserRole.USER],
-  },
-  {
-    href: '/user/orders',
-    label: 'Paczki',
-    icon: <PackageIcon size={24} weight="fill" />,
-    roles: [UserRole.USER],
-  },
-  {
-    href: '/company/orders',
-    label: 'Zlecenia',
-    icon: <PackageIcon size={24} weight="fill" />,
-    roles: [UserRole.DRONE_PROVIDER],
-  },
-  {
-    href: '/company/settings',
-    label: 'API',
-    icon: <GearIcon size={24} weight="fill" />,
-    roles: [UserRole.DRONE_PROVIDER],
-  },
-  {
-    href: '/moderator/approvals',
-    label: 'Akceptacja',
-    icon: <ShieldCheckIcon size={24} weight="fill" />,
-    roles: [UserRole.MODERATOR],
-  },
-  {
-    href: '/profile',
-    label: 'Profil',
-    icon: <UserIcon size={24} weight="fill" />,
-    roles: [UserRole.USER, UserRole.DRONE_PROVIDER, UserRole.MODERATOR],
-  },
-];
 
 export function Navbar() {
   const { data: session } = useSession();
@@ -80,7 +38,7 @@ export function Navbar() {
     return null;
   }
 
-  const filteredNavItems = navItems.filter((item) => {
+  const filteredNavItems = navItemsConfig.filter((item) => {
     if (!session?.user?.role) {
       return false;
     }
@@ -99,7 +57,7 @@ export function Navbar() {
               className={`flex flex-1 flex-col items-center justify-center gap-1 py-2 transition-colors ${active ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'
                 }`}
             >
-              {item.icon}
+              {navIconsByHref[item.href]}
               <span className="text-[10px] text-center leading-none">{item.label}</span>
             </Link>
           );

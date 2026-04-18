@@ -1,5 +1,6 @@
 'use client';
 
+import { roleDefaultPaths } from '@/lib/appAccess';
 import { UserRole } from '@prisma/client';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -13,21 +14,16 @@ export default function HomePage() {
     if (status === 'loading') return;
 
     if (!session?.user) {
-      router.replace('/guest');
+      router.replace('/auth/signin');
       return;
     }
 
-    if (session.user.role === UserRole.DRONE_PROVIDER) {
-      router.replace('/company/orders');
+    if (session.user.role in roleDefaultPaths) {
+      router.replace(roleDefaultPaths[session.user.role]);
       return;
     }
 
-    if (session.user.role === UserRole.MODERATOR) {
-      router.replace('/moderator/approvals');
-      return;
-    }
-
-    router.replace('/map');
+    router.replace(roleDefaultPaths[UserRole.USER]);
   }, [session, status, router]);
 
   return (

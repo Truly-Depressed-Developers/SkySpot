@@ -1,6 +1,6 @@
 import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
-import { UserRole } from '@prisma/client';
+import { canAccessPath, isPublicPath, isUserRole } from '@/lib/appAccess';
 
 export default withAuth(
   function middleware(req) {
@@ -11,9 +11,7 @@ export default withAuth(
       authorized: ({ token, req }) => {
         const pathname = req.nextUrl.pathname;
 
-        const publicPaths = ['/guest', '/auth/signin', '/auth/register'];
-
-        if (publicPaths.some((path) => pathname.startsWith(path))) {
+        if (isPublicPath(pathname)) {
           return true;
         }
 
@@ -21,29 +19,15 @@ export default withAuth(
           return false;
         }
 
-        const role = token.role;
-
-        if (pathname.startsWith('/user')) {
-          return role === UserRole.USER;
+        if (!isUserRole(token.role)) {
+          return false;
         }
 
-        if (pathname.startsWith('/company')) {
-          return role === UserRole.DRONE_PROVIDER;
-        }
-
-        if (pathname.startsWith('/moderator')) {
-          return role === UserRole.MODERATOR;
-        }
-
-        if (pathname.startsWith('/map')) {
-          return role === UserRole.USER || role === UserRole.DRONE_PROVIDER;
-        }
-
-        return true;
+        return canAccessPath(pathname, token.role);
       },
     },
     pages: {
-      signIn: '/guest',
+      signIn: '/auth/signin',
     },
   },
 );
