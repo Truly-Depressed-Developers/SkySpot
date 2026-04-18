@@ -6,16 +6,17 @@ import { NavigationIcon, BatteryIcon, PackageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSession } from 'next-auth/react';
 import { UserRole } from '@prisma/client';
+import { LatLngLiteral } from 'leaflet';
 
 interface DroneMarkerProps {
   drone: DroneStatusDTO;
 }
 
-function calculateBearing(startLat: number, startLng: number, destLat: number, destLng: number) {
-  const startLatRad = (startLat * Math.PI) / 180;
-  const startLngRad = (startLng * Math.PI) / 180;
-  const destLatRad = (destLat * Math.PI) / 180;
-  const destLngRad = (destLng * Math.PI) / 180;
+function calculateBearing(start: LatLngLiteral, dest: LatLngLiteral): number {
+  const startLatRad = (start.lat * Math.PI) / 180;
+  const startLngRad = (start.lng * Math.PI) / 180;
+  const destLatRad = (dest.lat * Math.PI) / 180;
+  const destLngRad = (dest.lng * Math.PI) / 180;
 
   const y = Math.sin(destLngRad - startLngRad) * Math.cos(destLatRad);
   const x =
@@ -29,20 +30,15 @@ export function DroneMarker({ drone }: DroneMarkerProps) {
   const { data: session } = useSession();
   const isUser = session?.user?.role === UserRole.USER;
   
-  const rotationAngle = calculateBearing(
-    drone.currentPosition.latitude,
-    drone.currentPosition.longitude,
-    drone.destination.latitude,
-    drone.destination.longitude,
-  );
+  const rotationAngle = calculateBearing(drone.currentPosition, drone.destination);
 
   return (
     <>
       {/* Odcinek przebyty - linia ciągła, lekko przezroczysta */}
       <MapPolyline
         positions={[
-          [drone.origin.latitude, drone.origin.longitude],
-          [drone.currentPosition.latitude, drone.currentPosition.longitude],
+          drone.origin,
+          drone.currentPosition,
         ]}
         pathOptions={{
           color: 'hsl(var(--primary))',
@@ -54,8 +50,8 @@ export function DroneMarker({ drone }: DroneMarkerProps) {
       {/* Odcinek do pokonania - linia przerywana */}
       <MapPolyline
         positions={[
-          [drone.currentPosition.latitude, drone.currentPosition.longitude],
-          [drone.destination.latitude, drone.destination.longitude],
+          drone.currentPosition,
+          drone.destination,
         ]}
         pathOptions={{
           color: 'hsl(var(--primary))',
@@ -67,7 +63,7 @@ export function DroneMarker({ drone }: DroneMarkerProps) {
 
       {/* Marker drona */}
       <MapMarker
-        position={[drone.currentPosition.latitude, drone.currentPosition.longitude]}
+        position={drone.currentPosition}
         icon={
           <div className="relative">
             <NavigationIcon
