@@ -12,6 +12,7 @@ import { MapPinIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 
 import { PageHeaderWithBack } from '@/components/FormHeader';
 import { BaseLayers } from '@/components/map/BaseLayers';
+import { LandingPadMarker } from '@/components/map/LandingPadMarker';
 import { KRAKOW_COORDINATES } from '@/components/map/mapConfig';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -22,7 +23,7 @@ import { Map, MapLayerGroup, MapLayers, MapLayersControl, MapMarker, MapZoomCont
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { trpc } from '@/trpc/client';
-import type { CoordsDTO } from '@/types/dtos';
+import type { CoordsDTO, LandingPadDetailsDTO } from '@/types/dtos';
 
 const landingPadTypeLabels: Record<LandingPadType, string> = {
   [LandingPadType.DRIVEWAY]: 'Podjazd',
@@ -122,9 +123,11 @@ function readFileAsDataUrl(file: File) {
 function CoordinatesPicker({
   value,
   onChange,
+  landingPads,
 }: {
   value: CoordsDTO | undefined;
   onChange: (coords: CoordsDTO) => void;
+  landingPads: LandingPadDetailsDTO[];
 }) {
   const [open, setOpen] = useState(false);
   const [mapCenter, setMapCenter] = useState<CoordsDTO>(KRAKOW_COORDINATES);
@@ -156,17 +159,22 @@ function CoordinatesPicker({
         <div className="space-y-4">
           <div className="h-80 overflow-hidden rounded-lg border">
             <Map center={mapCenter}>
-              <MapLayers defaultTileLayer="Jasna" defaultLayerGroups={['Wybrany punkt']}>
+              <MapLayers defaultTileLayer="Jasna" defaultLayerGroups={[]}>
                 <BaseLayers />
-                <MapLayerGroup name="Wybrany punkt">
-                  <MapClickHandler
-                    onSelect={(coords) => {
-                      setDraft(coords);
-                      setMapCenter(coords);
-                    }}
-                  />
-                  {draft && <MapMarker position={draft} />}
+
+                <MapLayerGroup name="Istniejące lądowiska">
+                  {landingPads.map((landingPad) => (
+                    <LandingPadMarker key={landingPad.id} pad={landingPad} />
+                  ))}
                 </MapLayerGroup>
+
+                <MapClickHandler
+                  onSelect={(coords) => {
+                    setDraft(coords);
+                    setMapCenter(coords);
+                  }}
+                />
+                {draft && <MapMarker position={draft} />}
                 <MapLayersControl
                   position="top-1 left-1"
                   tileLayersLabel="Widok mapy"
@@ -208,6 +216,9 @@ export function LandingPadForm() {
   const { data: session } = useSession();
   const isUser = session?.user?.role === UserRole.USER;
   const createLandingPadMutation = trpc.landingPad.create.useMutation();
+  const landingPadsQuery = trpc.landingPad.getAll.useQuery(undefined, {
+    enabled: isUser,
+  });
 
   const form = useForm<LandingPadFormData>({
     resolver: zodResolver(landingPadFormSchema),
@@ -348,7 +359,11 @@ export function LandingPadForm() {
                 name="coords"
                 render={({ field, fieldState }) => (
                   <>
-                    <CoordinatesPicker value={field.value} onChange={field.onChange} />
+                    <CoordinatesPicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      landingPads={landingPadsQuery.data ?? []}
+                    />
                     <FieldError>{getFieldErrorMessage('coords', fieldState.error?.message)}</FieldError>
                   </>
                 )}
