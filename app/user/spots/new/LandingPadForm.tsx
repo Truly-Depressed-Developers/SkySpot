@@ -12,8 +12,6 @@ import { MapPinIcon, UploadSimpleIcon } from '@phosphor-icons/react';
 
 import { PageHeaderWithBack } from '@/components/FormHeader';
 import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button-group';
-import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -39,15 +37,17 @@ const landingPadTypes = Object.values(LandingPadType).map((value) => ({
   label: landingPadTypeLabels[value],
 }));
 
-const accessOptionLabels: Record<LandingPadAvailability, string> = {
-  [LandingPadAvailability.PUBLIC]: 'Publiczny',
-  [LandingPadAvailability.PRIVATE]: 'Prywatny',
-};
+const accessOptions = [
+  {
+    value: LandingPadAvailability.PRIVATE,
+    label: 'Prywatny, dostępny tylko dla Ciebie',
+  },
+  {
+    value: LandingPadAvailability.PUBLIC,
+    label: 'Publiczny, dostępny dla wszystkich użytkowników',
+  },
+] as const;
 
-const accessOptions = Object.values(LandingPadAvailability).map((value) => ({
-  value,
-  label: accessOptionLabels[value],
-}));
 
 const landingPadFormSchema = z.object({
   name: z.string().min(1, 'Nazwa punktu jest wymagana'),
@@ -63,7 +63,31 @@ const landingPadFormSchema = z.object({
 
 type LandingPadFormData = z.infer<typeof landingPadFormSchema>;
 
-function formatCoords(coords: CoordsDTO) {
+function getFieldErrorMessage(field: 'type' | 'availability' | 'coords', message: string | undefined) {
+  if (!message) {
+    return undefined;
+  }
+
+  if (field === 'type' && message.startsWith('Invalid option')) {
+    return 'Typ punktu jest wymagany';
+  }
+
+  if (field === 'availability' && message.startsWith('Invalid option')) {
+    return 'Dostęp do punktu jest wymagany';
+  }
+
+  if (field === 'coords' && message.includes('expected object')) {
+    return 'Koordynaty punktu są wymagane';
+  }
+
+  return message;
+}
+
+function formatCoords(coords: CoordsDTO | undefined) {
+  if (!coords) {
+    return '';
+  }
+
   return `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
 }
 
@@ -99,15 +123,17 @@ function CoordinatesPicker({
   value,
   onChange,
 }: {
-  value: CoordsDTO;
+  value: CoordsDTO | undefined;
   onChange: (coords: CoordsDTO) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<CoordsDTO>(value);
+  const [mapCenter, setMapCenter] = useState<CoordsDTO>(KRAKOW_COORDINATES);
+  const [draft, setDraft] = useState<CoordsDTO | undefined>(value);
 
   useEffect(() => {
     if (open) {
       setDraft(value);
+      setMapCenter(value ?? KRAKOW_COORDINATES);
     }
   }, [open, value]);
 
@@ -129,7 +155,7 @@ function CoordinatesPicker({
 
         <div className="space-y-4">
           <div className="h-80 overflow-hidden rounded-lg border">
-            <Map center={draft}>
+            <Map center={mapCenter}>
               <MapLayers defaultTileLayer="Jasna">
                 <MapTileLayer
                   name="Jasna"
@@ -141,14 +167,21 @@ function CoordinatesPicker({
                   url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                   attribution="Tiles &copy; Esri"
                 />
-                <MapClickHandler onSelect={setDraft} />
-                <MapMarker position={draft} />
+                <MapClickHandler
+                  onSelect={(coords) => {
+                    setDraft(coords);
+                    setMapCenter(coords);
+                  }}
+                />
+                {draft && <MapMarker position={draft} />}
               </MapLayers>
               <MapZoomControl position="top-1 right-1" />
             </Map>
           </div>
 
-          <p className="text-sm text-muted-foreground">Wybrany punkt: {formatCoords(draft)}</p>
+          <p className="text-sm text-muted-foreground">
+            Wybrany punkt: {draft ? formatCoords(draft) : 'Nie wybrano'}
+          </p>
         </div>
 
         <DialogFooter>
@@ -156,8 +189,11 @@ function CoordinatesPicker({
             Anuluj
           </Button>
           <Button
+            disabled={!draft}
             onClick={() => {
-              onChange(draft);
+              if (draft) {
+                onChange(draft);
+              }
               setOpen(false);
             }}
           >
@@ -180,9 +216,9 @@ export function LandingPadForm() {
     defaultValues: {
       name: '',
       description: '',
-      type: LandingPadType.SQUARE,
+      type: undefined,
       availability: LandingPadAvailability.PUBLIC,
-      coords: KRAKOW_COORDINATES,
+      coords: undefined,
       imageUrl: '',
     },
   });
@@ -191,8 +227,28 @@ export function LandingPadForm() {
   const imageUrl = form.watch('imageUrl');
 
   const onSubmit = form.handleSubmit(async (values) => {
+    if (!values.type) {
+      form.setError('type', { message: 'Typ punktu jest wymagany' });
+      return;
+    }
+
+    if (!values.availability) {
+      form.setError('availability', { message: 'Dostęp do punktu jest wymagany' });
+      return;
+    }
+
+    if (!values.coords) {
+      form.setError('coords', { message: 'Koordynaty punktu są wymagane' });
+      return;
+    }
+
     try {
-      await createLandingPadMutation.mutateAsync(values);
+      await createLandingPadMutation.mutateAsync({
+        ...values,
+        type: values.type,
+        availability: values.availability,
+        coords: values.coords,
+      });
       toast.success('Punkt został zgłoszony');
       router.push('/user/spots');
     } catch {
@@ -224,12 +280,9 @@ export function LandingPadForm() {
 
       <main className="flex-1 space-y-8 p-4 pb-6">
         <section className="space-y-2">
-          <h2 className="text-3xl font-semibold tracking-tight">Dodaj nowy punkt odbioru</h2>
-          <p className="text-sm text-muted-foreground">Wypełnij formularz, wybierz punkt na mapie i dołącz zdjęcie miejsca.</p>
+          <h2 className="text-3xl font-medium tracking-tight">Dodaj nowy punkt odbioru</h2>
         </section>
 
-        <Card>
-          <CardContent className="space-y-6 p-4">
             <Field>
               <FieldLabel htmlFor="name">Nazwa punktu</FieldLabel>
               <Controller
@@ -237,7 +290,7 @@ export function LandingPadForm() {
                 name="name"
                 render={({ field, fieldState }) => (
                   <>
-                    <Input id={field.name} placeholder="Np. Punkt przy rynku" {...field} aria-invalid={fieldState.invalid} />
+                    <Input id={field.name} placeholder="Wpisz nazwę" {...field} aria-invalid={fieldState.invalid} />
                     <FieldError>{fieldState.error?.message}</FieldError>
                   </>
                 )}
@@ -253,7 +306,7 @@ export function LandingPadForm() {
                   <>
                     <Textarea
                       id={field.name}
-                      placeholder="Opisz charakter miejsca, dojazd lub ograniczenia dostępu"
+                      placeholder="Wpisz opis"
                       rows={4}
                       {...field}
                       aria-invalid={fieldState.invalid}
@@ -271,9 +324,9 @@ export function LandingPadForm() {
                 name="type"
                 render={({ field, fieldState }) => (
                   <>
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
                       <SelectTrigger id={field.name} className="w-full" aria-invalid={fieldState.invalid}>
-                        <SelectValue placeholder="Wybierz typ punktu" />
+                        <SelectValue placeholder="Wybierz typ" />
                       </SelectTrigger>
                       <SelectContent>
                         {landingPadTypes.map((type) => (
@@ -283,7 +336,7 @@ export function LandingPadForm() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <FieldError>{fieldState.error?.message}</FieldError>
+                    <FieldError>{getFieldErrorMessage('type', fieldState.error?.message)}</FieldError>
                   </>
                 )}
               />
@@ -295,7 +348,12 @@ export function LandingPadForm() {
               <Controller
                 control={form.control}
                 name="coords"
-                render={({ field }) => <CoordinatesPicker value={field.value} onChange={field.onChange} />}
+                render={({ field, fieldState }) => (
+                  <>
+                    <CoordinatesPicker value={field.value} onChange={field.onChange} />
+                    <FieldError>{getFieldErrorMessage('coords', fieldState.error?.message)}</FieldError>
+                  </>
+                )}
               />
             </Field>
 
@@ -304,23 +362,41 @@ export function LandingPadForm() {
               <Controller
                 control={form.control}
                 name="availability"
-                render={({ field }) => (
-                  <ButtonGroup className="w-full">
-                    {accessOptions.map((option) => {
-                      const selected = field.value === option.value;
-                      return (
-                        <Button
-                          key={option.value}
-                          type="button"
-                          className="flex-1"
-                          variant={selected ? 'default' : 'secondary'}
-                          onClick={() => field.onChange(option.value)}
-                        >
-                          {option.label}
-                        </Button>
-                      );
-                    })}
-                  </ButtonGroup>
+                render={({ field, fieldState }) => (
+                  <>
+                    <div className="space-y-2">
+                      {accessOptions.map((option) => {
+                        const isSelected = field.value === option.value;
+                        const optionId = `availability-${option.value.toLowerCase()}`;
+
+                        return (
+                          <label
+                            key={option.value}
+                            htmlFor={optionId}
+                            className={`block cursor-pointer rounded-xl border p-3 transition-colors ${
+                              isSelected
+                                ? 'border-blue-600 bg-blue-50 text-blue-800'
+                                : 'border-border bg-background text-foreground hover:bg-muted/30'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <input
+                                id={optionId}
+                                type="radio"
+                                name={field.name}
+                                value={option.value}
+                                checked={isSelected}
+                                onChange={() => field.onChange(option.value)}
+                                className="mt-1 size-4 accent-blue-600"
+                              />
+                              <span className="text-sm">{option.label}</span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <FieldError>{getFieldErrorMessage('availability', fieldState.error?.message)}</FieldError>
+                  </>
                 )}
               />
             </Field>
@@ -362,10 +438,6 @@ export function LandingPadForm() {
                 )}
               />
             </Field>
-
-            <p className="text-sm text-muted-foreground">Wybrane współrzędne: {formatCoords(coords)}</p>
-          </CardContent>
-        </Card>
       </main>
     </form>
   );
