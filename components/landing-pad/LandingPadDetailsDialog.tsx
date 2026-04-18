@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { LandingPadAvailability, LandingPadStatus, LandingPadType } from '@prisma/client';
-import { CaretLeftIcon } from '@phosphor-icons/react';
+import { CaretLeftIcon, GlobeHemisphereWestIcon, MoonIcon } from '@phosphor-icons/react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Map, MapMarker, MapTileLayer } from '@/components/ui/map';
 import type { LandingPadDetailsDTO } from '@/types/dtos';
 
 type Props = {
@@ -50,6 +52,8 @@ function formatPointAddress(lat: number, lng: number) {
 }
 
 export function LandingPadDetailsDialog({ landingPad }: Props) {
+  const [isSatelliteLayer, setIsSatelliteLayer] = useState(false);
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -72,7 +76,7 @@ export function LandingPadDetailsDialog({ landingPad }: Props) {
           <DialogDescription className="sr-only">Szczegółowe informacje o zgłoszonym lądowisku.</DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[calc(92dvh-61px)] overflow-y-auto p-4">
+        <div className="max-h-[calc(92dvh-61px)] overflow-y-auto p-4 pb-24">
           <div className="mx-auto w-full max-w-2xl space-y-4">
             {landingPad.imageUrl && (
               <img
@@ -101,21 +105,55 @@ export function LandingPadDetailsDialog({ landingPad }: Props) {
               )}
 
               <div>
-                <p className="text-xs text-muted-foreground">Adres punktu</p>
-                <p>{formatPointAddress(landingPad.coords.lat, landingPad.coords.lng)}</p>
-              </div>
-
-              <div>
                 <p className="text-xs text-muted-foreground">Dostęp do punktu</p>
                 <p>{availabilityLabels[landingPad.availability]}</p>
               </div>
 
               <div>
-                <p className="text-xs text-muted-foreground">Liczba rezerwacji</p>
-                <p>{landingPad.reservations.length}</p>
+                <p className="text-xs text-muted-foreground">Położenie na mapie</p>
+                <div className="relative mt-2 h-52 overflow-hidden rounded-md border">
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="secondary"
+                    className="absolute right-2 top-2 z-1000"
+                    aria-label={isSatelliteLayer ? 'Przełącz na zwykłą mapę' : 'Przełącz na widok satelitarny'}
+                    title={isSatelliteLayer ? 'Przełącz na zwykłą mapę' : 'Przełącz na widok satelitarny'}
+                    onClick={() => setIsSatelliteLayer((value) => !value)}
+                  >
+                    <GlobeHemisphereWestIcon size={16} /> 
+                  </Button>
+
+                  <Map center={landingPad.coords} zoom={16} className="h-full min-h-0! rounded-none">
+                    {isSatelliteLayer ? (
+                      <MapTileLayer
+                        name="Satelita"
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                        attribution="Tiles &copy; Esri"
+                      />
+                    ) : (
+                      <MapTileLayer
+                        name="Jasna"
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution="&copy; OpenStreetMap contributors"
+                      />
+                    )}
+                    <MapMarker position={landingPad.coords} />
+                  </Map>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground">Współrzędne</p>
+                <p>{formatPointAddress(landingPad.coords.lat, landingPad.coords.lng)}</p>
               </div>
             </div>
 
+          </div>
+        </div>
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-1000 p-4">
+          <div className="pointer-events-auto mx-auto w-full max-w-2xl rounded-lg border bg-background/95 p-2 shadow-lg backdrop-blur-sm">
             <DialogClose asChild>
               <Button variant="outline" className="w-full">
                 <CaretLeftIcon size={16} />
