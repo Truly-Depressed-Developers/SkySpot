@@ -11,7 +11,8 @@ import {
   MapPinIcon,
   PackageIcon,
   ShieldCheckIcon,
-  GearIcon
+  GearIcon,
+  DroneIcon
 } from '@phosphor-icons/react';
 import { useNavbar } from '@/hooks/useNavbar';
 
@@ -20,6 +21,7 @@ const navIconsByHref: Record<string, React.ReactNode> = {
   '/map': <MapTrifoldIcon size={24} weight="fill" />,
   '/user/spots': <MapPinIcon size={24} weight="fill" />,
   '/user/orders': <PackageIcon size={24} weight="fill" />,
+  '/company/drones': <DroneIcon size={24} weight="fill" />,
   '/company/orders': <PackageIcon size={24} weight="fill" />,
   '/company/settings': <GearIcon size={24} weight="fill" />,
   '/moderator/approvals': <ShieldCheckIcon size={24} weight="fill" />,
