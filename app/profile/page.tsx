@@ -1,12 +1,8 @@
 'use client';
 
-import { trpc } from '@/trpc/client';
 import { SettingsItem } from '@/components/settings/SettingsItem';
 import {
-  BuildingsIcon,
-  CurrencyDollarSimpleIcon,
   GearIcon,
-  StarIcon,
   SunIcon,
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
