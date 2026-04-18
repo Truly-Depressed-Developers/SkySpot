@@ -2,13 +2,19 @@
 
 import { PageHeader } from '@/components/PageHeader';
 import { trpc } from '@/trpc/client';
-import { UserRole } from '@prisma/client';
+import { LandingPadStatus, UserRole } from '@prisma/client';
 import { useSession } from 'next-auth/react';
+
+const landingPadStatusLabels: Record<LandingPadStatus, string> = {
+  [LandingPadStatus.WAITING_FOR_REVIEW]: 'Oczekuje na weryfikację',
+  [LandingPadStatus.ACCEPTED]: 'Zaakceptowane',
+  [LandingPadStatus.REJECTED]: 'Odrzucone',
+};
 
 export default function MyReportsPage() {
   const { data: session } = useSession();
   const isUser = session?.user?.role === UserRole.USER;
-  const myOrdersQuery = trpc.userOrder.getMine.useQuery(undefined, {
+  const landingPadsQuery = trpc.landingPad.getAll.useQuery(undefined, {
     enabled: isUser,
   });
 
@@ -21,12 +27,24 @@ export default function MyReportsPage() {
         )}
 
         {isUser && (
-          <section className="rounded-lg border p-4">
-            <h2 className="font-semibold">Podgląd danych użytkownika</h2>
-            <p className="text-sm text-muted-foreground">Liczba moich zamówień: {myOrdersQuery.data?.length ?? 0}</p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Docelowo tutaj trafią zgłoszenia lądowisk użytkownika po dodaniu dedykowanego endpointu.
+          <section className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Liczba zgłoszonych punktów: {landingPadsQuery.data?.length ?? 0}
             </p>
+
+            <ul className="space-y-3">
+              {landingPadsQuery.data?.map((landingPad) => (
+                <li key={landingPad.id} className="rounded-lg border p-4 text-sm">
+                  <p className="font-medium">{landingPad.name}</p>
+                  <p className="text-muted-foreground">Status: {landingPadStatusLabels[landingPad.status]}</p>
+                  <p className="text-muted-foreground">Opis: {landingPad.description}</p>
+                </li>
+              ))}
+            </ul>
+
+            {!landingPadsQuery.data?.length && (
+              <p className="text-sm text-muted-foreground">Brak zgłoszeń do wyświetlenia.</p>
+            )}
           </section>
         )}
       </main>
