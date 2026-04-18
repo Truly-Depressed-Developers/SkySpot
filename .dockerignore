@@ -1,0 +1,53 @@
+# Dependencies
+node_modules
+
+# Next.js build output
+.next
+out
+
+# Local database
+*.db
+*.db-journal
+
+# Environment files (keep .env.example for reference)
+.env
+.env.local
+.env.development
+.env.production
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE/Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Local SSL certificates
+certificates
+
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Claude/AI
+.claude
+
+# Documentation
+README.md
+AGENTS.md
+*.md
+
+# Netlify (not needed for Docker)
+netlify.toml
+
+# Misc
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*

@@ -1,0 +1,5 @@
+- Do not create unnecessary comments, only comment on the code if it's not self-explanatory
+- All the text should be in Polish
+- Do not use `any` type, try to avoid using `as` keyword
+- Do not use intefaces, use types instead
+- Props should be named as `Props`
