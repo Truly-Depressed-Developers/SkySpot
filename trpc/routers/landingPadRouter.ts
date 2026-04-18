@@ -34,9 +34,10 @@ export const landingPadRouter = router({
     return landingPads.map(mapLandingPadToDetailsDTO);
   }),
 
-  create: userProcedure.input(createLandingPadSchema).mutation(async ({ input }) => {
+  create: userProcedure.input(createLandingPadSchema).mutation(async ({ ctx, input }) => {
     const landingPad = await prisma.landingPad.create({
       data: {
+        ownerId: ctx.user.id,
         name: input.name,
         description: input.description,
         imageUrl: input.imageUrl,

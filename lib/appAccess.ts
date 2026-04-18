@@ -9,12 +9,13 @@ export type NavItemConfig = {
 export const publicPaths = ['/guest', '/auth/signin', '/auth/register'] as const;
 
 export const roleDefaultPaths: Record<UserRole, string> = {
-  [UserRole.USER]: '/map',
-  [UserRole.DRONE_PROVIDER]: '/company/orders',
-  [UserRole.MODERATOR]: '/moderator/approvals',
+  [UserRole.USER]: '/dashboard',
+  [UserRole.DRONE_PROVIDER]: '/dashboard',
+  [UserRole.MODERATOR]: '/dashboard',
 };
 
 export const routeAccessRules: Array<{ prefix: string; roles: UserRole[] }> = [
+  { prefix: '/dashboard', roles: [UserRole.USER, UserRole.DRONE_PROVIDER, UserRole.MODERATOR] },
   { prefix: '/user', roles: [UserRole.USER] },
   { prefix: '/company', roles: [UserRole.DRONE_PROVIDER] },
   { prefix: '/moderator', roles: [UserRole.MODERATOR] },
@@ -22,6 +23,11 @@ export const routeAccessRules: Array<{ prefix: string; roles: UserRole[] }> = [
 ];
 
 export const navItemsConfig: NavItemConfig[] = [
+  {
+    href: '/dashboard',
+    label: 'Dashboard',
+    roles: [UserRole.USER, UserRole.DRONE_PROVIDER, UserRole.MODERATOR],
+  },
   { href: '/map', label: 'Mapa', roles: [UserRole.USER, UserRole.DRONE_PROVIDER] },
   { href: '/user/spots', label: 'Miejsca', roles: [UserRole.USER] },
   { href: '/user/orders', label: 'Paczki', roles: [UserRole.USER] },

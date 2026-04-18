@@ -18,7 +18,8 @@ model User {
 
   sessions           Session[]
   orders             Order[]
-  providerDeliveries Delivery[] @relation("DeliveryProvider")
+  providerDeliveries Delivery[]   @relation("DeliveryProvider")
+  landingPads        LandingPad[]
 }
 
 model Session {
@@ -35,6 +36,7 @@ model LandingPad {
   name            String
   description     String                 @default("")
   rejectionReason String                 @default("")
+  ownerId         String?
   imageUrl        String
   latitude        Float
   longitude       Float
@@ -44,6 +46,7 @@ model LandingPad {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
+  owner      User?      @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   orders     Order[]
   deliveries Delivery[]
 }
