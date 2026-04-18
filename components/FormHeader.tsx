@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -7,9 +8,10 @@ import { Button } from '@/components/ui/button';
 type Props = {
   title: string;
   onBack?: () => void;
+  action?: ReactNode;
 };
 
-export function PageHeaderWithBack({ title, onBack }: Props) {
+export function PageHeaderWithBack({ title, onBack, action }: Props) {
   const router = useRouter();
 
   const handleBack = () => {
@@ -31,6 +33,7 @@ export function PageHeaderWithBack({ title, onBack }: Props) {
         <ArrowLeftIcon size={28} />
       </Button>
       <h1 className="text-lg font-semibold">{title}</h1>
+      {action && <div className="absolute right-4">{action}</div>}
     </div>
   );
 }

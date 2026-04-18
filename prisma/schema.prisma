@@ -33,6 +33,7 @@ model Session {
 model LandingPad {
   id           String                 @id @default(cuid())
   name         String
+  description  String                 @default("")
   imageUrl     String
   latitude     Float
   longitude    Float

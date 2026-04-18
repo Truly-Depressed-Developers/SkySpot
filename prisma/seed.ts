@@ -74,6 +74,7 @@ async function main() {
       {
         id: 'lp-centrum',
         name: 'Lądowisko Centrum',
+        description: 'Centralny punkt odbioru przy rynku.',
         imageUrl: 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6',
         latitude: 52.2297,
         longitude: 21.0122,
@@ -84,6 +85,7 @@ async function main() {
       {
         id: 'lp-zachod',
         name: 'Lądowisko Zachód',
+        description: 'Punkt odbioru po zachodniej stronie miasta.',
         imageUrl: 'https://images.unsplash.com/photo-1470115636492-6d2b56f9146d',
         latitude: 52.232,
         longitude: 20.952,
@@ -94,6 +96,7 @@ async function main() {
       {
         id: 'lp-prywatne-1',
         name: 'Lądowisko Osiedle Północ',
+        description: 'Prywatny punkt na osiedlu z ograniczonym dostępem.',
         imageUrl: 'https://images.unsplash.com/photo-1517976547714-720226b864c1',
         latitude: 52.267,
         longitude: 21.03,

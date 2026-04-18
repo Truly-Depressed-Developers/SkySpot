@@ -1,9 +1,8 @@
-export type CoordsDTO = {
-  latitude: number;
-  longitude: number;
-};
+import type { LatLngLiteral } from 'leaflet';
+
+export type CoordsDTO = LatLngLiteral;
 
 export const mapCoordsToDTO = (latitude: number, longitude: number): CoordsDTO => ({
-  latitude,
-  longitude,
+  lat: latitude,
+  lng: longitude,
 });
