@@ -30,12 +30,12 @@ const accessOptions = [
   },
 ] as const;
 
-interface LandingPadDetailsViewProps {
+type LandingPadDetailsViewProps = {
   pad: LandingPadDetailsDTO;
   onBack: () => void;
   onSaveSuccess: (pad: LandingPadDetailsDTO) => void;
   onStatusSuccess: () => void;
-}
+};
 
 export function LandingPadDetailsView({
   pad,
@@ -44,14 +44,20 @@ export function LandingPadDetailsView({
   onStatusSuccess,
 }: LandingPadDetailsViewProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const isWaitingForReview = pad.status === LandingPadStatus.WAITING_FOR_REVIEW;
 
   const updateStatusMutation = trpc.landingPad.updateStatus.useMutation();
   const updateMutation = trpc.landingPad.update.useMutation();
 
   const handleStatusUpdate = async (status: LandingPadStatus) => {
+    if (!isWaitingForReview) {
+      toast.error('Status zgłoszenia został już rozpatrzony');
+      return;
+    }
+
     try {
       await updateStatusMutation.mutateAsync({ id: pad.id, status });
-      toast.success(`Punkt został ${status === 'ACCEPTED' ? 'zaakceptowany' : 'odrzucony'}`);
+      toast.success(`Punkt został ${status === LandingPadStatus.ACCEPTED ? 'zaakceptowany' : 'odrzucony'}`);
       onStatusSuccess();
     } catch {
       toast.error('Wystąpił błąd podczas zmiany statusu');
@@ -59,6 +65,11 @@ export function LandingPadDetailsView({
   };
 
   const handleSave = async (values: LandingPadFormData) => {
+    if (!isWaitingForReview) {
+      toast.error('Można edytować tylko zgłoszenia oczekujące na weryfikację');
+      return;
+    }
+
     try {
       const updatedPad = await updateMutation.mutateAsync({
         id: pad.id,
@@ -77,7 +88,7 @@ export function LandingPadDetailsView({
       <PageHeaderWithBack
         title={isEditing ? "Edycja punktu" : "Szczegóły punktu"}
         onBack={isEditing ? () => setIsEditing(false) : onBack}
-        action={
+        action={isWaitingForReview ? (
           <button
             onClick={() => {
               if (isEditing) {
@@ -90,7 +101,7 @@ export function LandingPadDetailsView({
           >
             {isEditing ? "Zapisz" : "Edytuj"}
           </button>
-        }
+        ) : null}
       />
 
       {isEditing ? (
@@ -109,23 +120,25 @@ export function LandingPadDetailsView({
             readonly
           />
 
-          <footer className="fixed bottom-[50px] left-0 right-0 p-4 bg-background border-t flex flex-col gap-3 z-50 md:max-w-md md:mx-auto">
-            <Button
-              className="w-full h-14 rounded-full bg-black text-white hover:bg-black/90 text-lg font-semibold"
-              onClick={() => handleStatusUpdate('ACCEPTED')}
-              disabled={updateStatusMutation.isPending}
-            >
-              Zaakceptuj punkt
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full h-14 rounded-full border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600 text-lg font-semibold"
-              onClick={() => handleStatusUpdate('REJECTED')}
-              disabled={updateStatusMutation.isPending}
-            >
-              Odrzuć punkt
-            </Button>
-          </footer>
+          {isWaitingForReview && (
+            <footer className="fixed bottom-12.5 left-0 right-0 p-4 bg-background border-t flex flex-col gap-3 z-50 md:max-w-md md:mx-auto">
+              <Button
+                className="w-full h-14 rounded-full bg-black text-white hover:bg-black/90 text-lg font-semibold"
+                onClick={() => handleStatusUpdate(LandingPadStatus.ACCEPTED)}
+                disabled={updateStatusMutation.isPending}
+              >
+                Zaakceptuj punkt
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full h-14 rounded-full border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600 text-lg font-semibold"
+                onClick={() => handleStatusUpdate(LandingPadStatus.REJECTED)}
+                disabled={updateStatusMutation.isPending}
+              >
+                Odrzuć punkt
+              </Button>
+            </footer>
+          )}
         </>
       )}
     </div>

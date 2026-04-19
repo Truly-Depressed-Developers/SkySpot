@@ -1,4 +1,5 @@
 import { LandingPadAvailability, LandingPadStatus, LandingPadType } from '@prisma/client';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { prisma } from '@/prisma/prisma';
@@ -21,6 +22,11 @@ const createLandingPadSchema = z.object({
 const updateLandingPadSchema = createLandingPadSchema.extend({
   id: z.string(),
 });
+
+const moderationStatusSchema = z.union([
+  z.literal(LandingPadStatus.ACCEPTED),
+  z.literal(LandingPadStatus.REJECTED),
+]);
 
 export const landingPadRouter = router({
   getAll: publicProcedure.query(async () => {
@@ -55,8 +61,27 @@ export const landingPadRouter = router({
   }),
 
   updateStatus: moderatorProcedure
-    .input(z.object({ id: z.string(), status: z.enum(LandingPadStatus) }))
+    .input(z.object({ id: z.string(), status: moderationStatusSchema }))
     .mutation(async ({ input }) => {
+      const existingPad = await prisma.landingPad.findUnique({
+        where: { id: input.id },
+        select: { status: true },
+      });
+
+      if (!existingPad) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Nie znaleziono zgłoszenia',
+        });
+      }
+
+      if (existingPad.status !== LandingPadStatus.WAITING_FOR_REVIEW) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Status zgłoszenia został już rozpatrzony',
+        });
+      }
+
       const landingPad = await prisma.landingPad.update({
         where: { id: input.id },
         data: { status: input.status },
@@ -66,6 +91,25 @@ export const landingPadRouter = router({
     }),
 
   update: moderatorProcedure.input(updateLandingPadSchema).mutation(async ({ input }) => {
+    const existingPad = await prisma.landingPad.findUnique({
+      where: { id: input.id },
+      select: { status: true },
+    });
+
+    if (!existingPad) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Nie znaleziono zgłoszenia',
+      });
+    }
+
+    if (existingPad.status !== LandingPadStatus.WAITING_FOR_REVIEW) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Można edytować tylko zgłoszenia oczekujące na weryfikację',
+      });
+    }
+
     const landingPad = await prisma.landingPad.update({
       where: { id: input.id },
       data: {
