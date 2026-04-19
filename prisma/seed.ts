@@ -1,7 +1,9 @@
 import { PrismaClient, UserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { encryptApiKeySecret, hashApiKeySecret } from '../lib/companyApiKeys';
 
 const prisma = new PrismaClient();
+const hardcodedProviderApiKey = 'ck_live_provider1_hacknarok2026';
 
 function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60 * 1000);
@@ -43,6 +45,7 @@ async function main() {
   await prisma.delivery.deleteMany();
   await prisma.order.deleteMany();
   await prisma.landingPad.deleteMany();
+  await prisma.companyApiKey.deleteMany();
 
   const regularUser1 = await createUser(
     'jan@mail.com',
@@ -73,6 +76,17 @@ async function main() {
     'password123',
     UserRole.DRONE_PROVIDER,
   );
+
+  await prisma.companyApiKey.create({
+    data: {
+      userId: droneProvider1.id,
+      name: 'Klucz seed provider1',
+      secretHash: hashApiKeySecret(hardcodedProviderApiKey),
+      encryptedSecret: encryptApiKeySecret(hardcodedProviderApiKey),
+      secretPrefix: hardcodedProviderApiKey.slice(0, 8),
+      secretLast4: hardcodedProviderApiKey.slice(-4),
+    },
+  });
 
   await prisma.landingPad.createMany({
     data: [
@@ -442,6 +456,7 @@ async function main() {
   });
 
   console.log('\nSeeding completed!');
+  console.log(`Hardcoded API key provider1: ${hardcodedProviderApiKey}`);
 }
 
 main()
