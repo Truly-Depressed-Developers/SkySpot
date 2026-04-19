@@ -33,7 +33,6 @@ export const navItemsConfig: NavItemConfig[] = [
   { href: '/user/orders', label: 'Paczki', roles: [UserRole.USER] },
   { href: '/company/drones', label: 'Drony', roles: [UserRole.DRONE_PROVIDER] },
   { href: '/company/orders', label: 'Zlecenia', roles: [UserRole.DRONE_PROVIDER] },
-  { href: '/company/settings', label: 'API', roles: [UserRole.DRONE_PROVIDER] },
   { href: '/moderator/approvals', label: 'Akceptacja', roles: [UserRole.MODERATOR] },
   {
     href: '/profile',
