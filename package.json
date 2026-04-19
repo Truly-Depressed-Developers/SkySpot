@@ -17,6 +17,7 @@
     "db:migrate": "prisma migrate dev --name",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
+    "env:init": "node -e \"const fs=require('node:fs');const path=require('node:path');const envExamplePath=path.join(process.cwd(),'.env.example');const envPath=path.join(process.cwd(),'.env');if(!fs.existsSync(envExamplePath)){throw new Error('.env.example nie istnieje');}const example=fs.readFileSync(envExamplePath,'utf8');const withSecret=example.replace(/NEXTAUTH_SECRET=.*/,'NEXTAUTH_SECRET=example-nextauth-secret-2026');fs.writeFileSync(envPath,withSecret,'utf8');console.log('Utworzono plik .env z przykładowym sekretem.');\"",
     "sim": "tsx lib/droneSimulator.ts -- --api-key ck_live_provider1_hacknarok2026 --mode full-flow",
     "simulate": "tsx lib/droneSimulator.ts",
     "preinstall": "node -e \"if(process.env.npm_execpath.indexOf('pnpm') === -1) throw new Error('You must use PNPM to install')\""
