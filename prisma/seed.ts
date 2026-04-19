@@ -3,7 +3,8 @@ import bcrypt from 'bcryptjs';
 import { encryptApiKeySecret, hashApiKeySecret } from '../lib/companyApiKeys';
 
 const prisma = new PrismaClient();
-const hardcodedProviderApiKey = 'ck_live_provider1_hacknarok2026';
+const hardcodedProvider1ApiKey = 'ck_live_provider1_hacknarok2026';
+const hardcodedProvider2ApiKey = 'ck_live_provider2_hacknarok2026';
 
 function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60 * 1000);
@@ -81,10 +82,21 @@ async function main() {
     data: {
       userId: droneProvider1.id,
       name: 'Klucz seed provider1',
-      secretHash: hashApiKeySecret(hardcodedProviderApiKey),
-      encryptedSecret: encryptApiKeySecret(hardcodedProviderApiKey),
-      secretPrefix: hardcodedProviderApiKey.slice(0, 8),
-      secretLast4: hardcodedProviderApiKey.slice(-4),
+      secretHash: hashApiKeySecret(hardcodedProvider1ApiKey),
+      encryptedSecret: encryptApiKeySecret(hardcodedProvider1ApiKey),
+      secretPrefix: hardcodedProvider1ApiKey.slice(0, 8),
+      secretLast4: hardcodedProvider1ApiKey.slice(-4),
+    },
+  });
+
+  await prisma.companyApiKey.create({
+    data: {
+      userId: droneProvider2.id,
+      name: 'Klucz seed provider2',
+      secretHash: hashApiKeySecret(hardcodedProvider2ApiKey),
+      encryptedSecret: encryptApiKeySecret(hardcodedProvider2ApiKey),
+      secretPrefix: hardcodedProvider2ApiKey.slice(0, 8),
+      secretLast4: hardcodedProvider2ApiKey.slice(-4),
     },
   });
 
@@ -756,7 +768,8 @@ async function main() {
   });
 
   console.log('\nSeeding completed!');
-  console.log(`Hardcoded API key provider1: ${hardcodedProviderApiKey}`);
+  console.log(`Hardcoded API key provider1: ${hardcodedProvider1ApiKey}`);
+  console.log(`Hardcoded API key provider2: ${hardcodedProvider2ApiKey}`);
 }
 
 main()

@@ -12,32 +12,37 @@
 ## Installation
 
 Install dependencies
+
 ```
 pnpm i
 ```
 
 Create example `.env` file
+
 ```
 pnpm env:init
 ```
 
 Create database and seed data
+
 ```
 pnpm db:reset
 ```
 
 Start server
+
 ```
 pnpm dev
 ```
 
-Website will be availabe at [localhost:3000](htpp://localhost:3000)
-
+Website will be available at [localhost:3000](http://localhost:3000). The website is designed for mobile view, so open it in your browser's mobile mode.
 
 To make drones move, you can additionally start another script simulating external drone provider system
+
 ```
 pnpm sim
 ```
+
 The external API enables real-time drone tracking and updates, order processing, landing pad reservations and more
 
 ## Tech Stack
