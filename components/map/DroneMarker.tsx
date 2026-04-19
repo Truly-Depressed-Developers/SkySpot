@@ -1,16 +1,16 @@
 'use client';
 
-import { MapMarker, MapPopup, MapPolyline } from '@/components/ui/map';
+import { MapMarker, MapPolyline } from '@/components/ui/map';
 import { DroneStatusDTO } from '@/types/dtos';
-import { NavigationIcon, BatteryIcon, PackageIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { NavigationIcon, BatteryIcon } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { UserRole } from '@prisma/client';
 import { LatLngLiteral } from 'leaflet';
 
-interface DroneMarkerProps {
+type Props = {
   drone: DroneStatusDTO;
-}
+  onSelect?: (drone: DroneStatusDTO) => void;
+};
 
 function calculateBearing(start: LatLngLiteral, dest: LatLngLiteral): number {
   const startLatRad = (start.lat * Math.PI) / 180;
@@ -26,7 +26,7 @@ function calculateBearing(start: LatLngLiteral, dest: LatLngLiteral): number {
   return (bearing + 360) % 360;
 }
 
-export function DroneMarker({ drone }: DroneMarkerProps) {
+export function DroneMarker({ drone, onSelect }: Props) {
   const { data: session } = useSession();
   const isUser = session?.user?.role === UserRole.USER;
 
@@ -64,6 +64,11 @@ export function DroneMarker({ drone }: DroneMarkerProps) {
       {/* Marker drona */}
       <MapMarker
         position={drone.currentPosition}
+        eventHandlers={{
+          click: () => {
+            onSelect?.(drone);
+          },
+        }}
         icon={
           <div className="relative">
             <NavigationIcon
@@ -78,34 +83,7 @@ export function DroneMarker({ drone }: DroneMarkerProps) {
             )}
           </div>
         }
-      >
-        <MapPopup>
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <PackageIcon className="size-5 text-blue-500" />
-              <h3 className="font-bold">Dron: {drone.droneId}</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              {!isUser && (
-                <div className="flex flex-col border rounded p-1">
-                  <span className="text-muted-foreground">Bateria</span>
-                  <span className={`font-bold ${drone.batteryLevel < 20 ? 'text-red-500' : 'text-green-500'}`}>
-                    {drone.batteryLevel}%
-                  </span>
-                </div>
-              )}
-              <div className={`flex flex-col border rounded p-1 ${isUser ? 'col-span-2' : ''}`}>
-                <span className="text-muted-foreground">Status</span>
-                <span className="font-bold">W LOCIE</span>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              ID Zamówienia: <span className="font-mono">{drone.orderId}</span>
-            </p>
-            <Button size="sm" variant="outline" className="mt-2 w-full">Szczegóły dostawy</Button>
-          </div>
-        </MapPopup>
-      </MapMarker>
+      />
     </>
   );
 }
