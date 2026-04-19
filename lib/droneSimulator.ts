@@ -1,10 +1,9 @@
 import { z } from 'zod';
 
 const defaultMode = 'full-flow';
-const defaultStep = 0.001;
+const defaultStep = 0.005;
 const defaultIntervalMs = 1000;
 const defaultBaseUrl = 'http://localhost:3000';
-const defaultTargetFlights = 2;
 const krakowCenterLat = 50.06143;
 const krakowCenterLng = 19.93658;
 
@@ -135,13 +134,14 @@ type SimulatorConfig = {
   baseUrl: string;
   intervalMs: number;
   step: number;
-  targetFlights: number;
+  targetFlights: number | null;
 };
 
 type SimulatorState = {
   tick: number;
   activeFlightsByDeliveryId: Map<string, ActiveFlight>;
   originByLandingPadId: Map<string, CoordsDTO>;
+  knownDroneIds: Set<string>;
 };
 
 const orderTypeCycle: Array<z.infer<typeof orderTypeSchema>> = [
@@ -200,6 +200,20 @@ function parseModeArg(value: string | null): z.infer<typeof modeSchema> {
   return parsed.data;
 }
 
+function parseTargetFlightsArg(value: string | null): number | null {
+  if (!value || value === 'all') {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error('Parametr --target-flights musi być dodatnią liczbą albo wartością all');
+  }
+
+  return parsed;
+}
+
 function buildConfig(): SimulatorConfig {
   const args = process.argv.slice(2);
 
@@ -208,11 +222,7 @@ function buildConfig(): SimulatorConfig {
   const baseUrl = (parseOptionalArg('--base-url', args) ?? defaultBaseUrl).replace(/\/$/, '');
   const intervalMs = parseNumberArg(parseOptionalArg('--interval-ms', args), defaultIntervalMs, '--interval-ms');
   const step = parseNumberArg(parseOptionalArg('--step', args), defaultStep, '--step');
-  const targetFlights = parseNumberArg(
-    parseOptionalArg('--target-flights', args),
-    defaultTargetFlights,
-    '--target-flights',
-  );
+  const targetFlights = parseTargetFlightsArg(parseOptionalArg('--target-flights', args));
 
   return {
     mode,
@@ -226,7 +236,7 @@ function buildConfig(): SimulatorConfig {
 
 function printUsage(): void {
   console.log(
-    'Użycie: pnpm simulate -- --api-key <KLUCZ> [--mode <telemetry-only|full-flow>] [--base-url <URL>] [--interval-ms <MS>] [--step <WARTOŚĆ>] [--target-flights <N>]',
+    'Użycie: pnpm simulate -- --api-key <KLUCZ> [--mode <telemetry-only|full-flow>] [--base-url <URL>] [--interval-ms <MS>] [--step <WARTOŚĆ>] [--target-flights <N|all>]',
   );
 }
 
@@ -430,10 +440,6 @@ async function selectAvailableLandingPad(
   return null;
 }
 
-function buildDroneIdForOrder(orderId: string): string {
-  return `SIM-DRONE-${orderId.slice(0, 8).toUpperCase()}`;
-}
-
 async function createReservation(
   config: SimulatorConfig,
   orderId: string,
@@ -588,9 +594,25 @@ async function runTelemetryOnlyIteration(config: SimulatorConfig): Promise<void>
 }
 
 async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorState): Promise<void> {
-  const currentShipments = await fetchShipmentsReady(config);
+  const [currentShipments, currentDrones] = await Promise.all([
+    fetchShipmentsReady(config),
+    fetchDrones(config),
+  ]);
 
-  if (currentShipments.length < config.targetFlights && state.tick % 2 === 0) {
+  for (const shipment of currentShipments) {
+    state.knownDroneIds.add(shipment.delivery.droneId);
+  }
+
+  for (const drone of currentDrones) {
+    state.knownDroneIds.add(drone.droneId);
+  }
+
+  const targetFlights = config.targetFlights ?? state.knownDroneIds.size;
+  const busyDroneIds = new Set(currentShipments.map((shipment) => shipment.delivery.droneId));
+  const freeDroneIds = Array.from(state.knownDroneIds).filter((droneId) => !busyDroneIds.has(droneId));
+  const missingFlights = Math.max(0, targetFlights - currentShipments.length);
+
+  if (missingFlights > 0 && freeDroneIds.length > 0) {
     try {
       const nearbyPads = await findNearbyLandingPads(config, {
         lat: krakowCenterLat,
@@ -602,17 +624,23 @@ async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorSta
       } else if (nearbyPads.length < 2) {
         console.log('[Simulator] Za mało lądowisk, żeby wyznaczyć osobny start i cel lotu.');
       } else {
-        const destinationPad = nearbyPads[state.tick % nearbyPads.length];
-        const destination = destinationPad.coords;
-        const selectedPad = await selectAvailableLandingPad(config, nearbyPads, destinationPad.id);
+        let createdFlights = 0;
+        const createLimit = Math.min(missingFlights, freeDroneIds.length);
 
-        if (!selectedPad) {
-          console.log('[Simulator] Brak dostępnego lądowiska dla nowego zlecenia w tym ticku.');
-        } else {
+        for (let i = 0; i < createLimit; i += 1) {
+          const droneId = freeDroneIds[i];
+          const destinationPad = nearbyPads[(state.tick + i) % nearbyPads.length];
+          const destination = destinationPad.coords;
+          const selectedPad = await selectAvailableLandingPad(config, nearbyPads, destinationPad.id);
+
+          if (!selectedPad) {
+            console.log('[Simulator] Brak dostępnego lądowiska dla nowego zlecenia w tym ticku.');
+            continue;
+          }
+
           state.originByLandingPadId.set(selectedPad.id, selectedPad.coords);
 
           const order = await createIntakeOrder(config, state, destination, selectedPad.id);
-          const droneId = buildDroneIdForOrder(order.orderId);
           const delivery = await createReservation(config, order.orderId, droneId);
           const preferredOrigin = state.originByLandingPadId.get(order.landingPadId);
           const fallbackOrigin = selectedPad.coords;
@@ -628,9 +656,15 @@ async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorSta
             batteryLevel: 100,
           });
 
+          createdFlights += 1;
+
           console.log(
-            `[Simulator] Utworzono rezerwację dla zamówienia ${order.orderId} z ${order.landingPadId} do ${destinationPad.id}.`,
+            `[Simulator] Utworzono rezerwację dla zamówienia ${order.orderId} dronem ${delivery.droneId} z ${order.landingPadId} do ${destinationPad.id}.`,
           );
+        }
+
+        if (createdFlights > 0) {
+          console.log(`[Simulator] Utworzono ${createdFlights} nowych lotów w tym ticku.`);
         }
       }
     } catch (error) {
@@ -721,13 +755,14 @@ async function main() {
   console.log('--- Symulator Dronów Hacknarok 2026 ---');
   console.log('Tryb:', config.mode);
   console.log('Adres API:', config.baseUrl);
+  const targetFlightsLabel = config.targetFlights === null ? 'wszystkie wykryte drony' : config.targetFlights;
   console.log(
     'Częstotliwość:',
     `${config.intervalMs}ms`,
     'Krok:',
     config.step,
     'Target lotów:',
-    config.targetFlights,
+    targetFlightsLabel,
   );
   console.log('Naciśnij Ctrl+C aby przerwać.');
 
@@ -735,6 +770,7 @@ async function main() {
     tick: 0,
     activeFlightsByDeliveryId: new Map(),
     originByLandingPadId: new Map(),
+    knownDroneIds: new Set(),
   };
 
   setInterval(async () => {
