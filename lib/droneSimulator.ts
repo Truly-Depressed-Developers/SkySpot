@@ -674,54 +674,10 @@ async function runFullFlowTelemetryIteration(
   config: SimulatorConfig,
   state: SimulatorState,
 ): Promise<void> {
-  const [currentShipments, currentDrones] = await Promise.all([
-    fetchShipmentsReady(config),
-    fetchDrones(config),
-  ]);
-  for (const shipment of currentShipments) {
-    state.knownDroneIds.add(shipment.delivery.droneId);
-  }
-
-  const drones = currentDrones;
-  const droneByOrderId = new Map(drones.map((drone) => [drone.orderId, drone]));
-  const shipments = currentShipments;
-
-  const plannedFlights = shipments.map((shipment) => {
-    const existingFlight = state.activeFlightsByDeliveryId.get(shipment.delivery.id);
-    const droneStatus = droneByOrderId.get(shipment.order.orderId);
-
-    const originFromMemory = state.originByLandingPadId.get(shipment.order.landingPadId);
-    const fallbackOrigin = buildFallbackOrigin(shipment.order.destination, shipment.delivery.id);
-    const lastKnownPosition = state.lastPositionByDroneId.get(shipment.delivery.droneId);
-    const shouldUseLastKnownPosition = !existingFlight && Boolean(lastKnownPosition);
-
-    const origin =
-      (shouldUseLastKnownPosition ? lastKnownPosition : droneStatus?.origin) ??
-      existingFlight?.origin ??
-      originFromMemory ??
-      fallbackOrigin;
-    const currentPosition =
-      (shouldUseLastKnownPosition ? lastKnownPosition : droneStatus?.currentPosition) ??
-      existingFlight?.currentPosition ??
-      origin;
-
-    const flight: ActiveFlight = {
-      deliveryId: shipment.delivery.id,
-      orderId: shipment.order.orderId,
-      droneId: shipment.delivery.droneId,
-      landingPadId: shipment.order.landingPadId,
-      destinationLandingPadId: existingFlight?.destinationLandingPadId ?? null,
-      currentPosition,
-      origin,
-      destination: shipment.order.destination,
-      batteryLevel: droneStatus?.batteryLevel ?? existingFlight?.batteryLevel ?? 100,
-    };
-
-    return {
-      shipment,
-      next: calculateNextFlightState(flight, config.step),
-    };
-  });
+  const plannedFlights = Array.from(state.activeFlightsByDeliveryId.values()).map((flight) => ({
+    flight,
+    next: calculateNextFlightState(flight, config.step),
+  }));
 
   const telemetryBatch = plannedFlights.map((plannedFlight) =>
     toDroneTelemetry(plannedFlight.next.flight),
@@ -734,7 +690,7 @@ async function runFullFlowTelemetryIteration(
 
     for (const plannedFlight of plannedFlights) {
       state.activeFlightsByDeliveryId.set(
-        plannedFlight.shipment.delivery.id,
+        plannedFlight.flight.deliveryId,
         plannedFlight.next.flight,
       );
       state.lastPositionByDroneId.set(
@@ -744,7 +700,7 @@ async function runFullFlowTelemetryIteration(
     }
 
     console.log(
-      `[Simulator] Tick ${state.tick}: aktywne loty ${state.activeFlightsByDeliveryId.size}, przesyłki gotowe ${shipments.length}`,
+      `[Simulator] Tick ${state.tick}: aktywne loty ${state.activeFlightsByDeliveryId.size}`,
     );
     return;
   }
@@ -756,7 +712,7 @@ async function runFullFlowTelemetryIteration(
   for (const plannedFlight of activeFlights) {
     shipmentResults.push({
       kind: 'active',
-      deliveryId: plannedFlight.shipment.delivery.id,
+      deliveryId: plannedFlight.flight.deliveryId,
       flight: plannedFlight.next.flight,
     });
   }
@@ -764,25 +720,25 @@ async function runFullFlowTelemetryIteration(
   const arrivedResults = await Promise.all(
     arrivedFlights.map(async (plannedFlight): Promise<ShipmentProcessingResult> => {
       try {
-        await confirmDelivery(config, plannedFlight.shipment.delivery.id);
-        console.log(`[Simulator] Potwierdzono dostawę ${plannedFlight.shipment.delivery.id}.`);
+        await confirmDelivery(config, plannedFlight.flight.deliveryId);
+        console.log(`[Simulator] Potwierdzono dostawę ${plannedFlight.flight.deliveryId}.`);
 
         return {
           kind: 'arrived',
-          deliveryId: plannedFlight.shipment.delivery.id,
+          deliveryId: plannedFlight.flight.deliveryId,
           droneId: plannedFlight.next.flight.droneId,
           destinationLandingPadId: plannedFlight.next.flight.destinationLandingPadId,
           currentPosition: plannedFlight.next.flight.currentPosition,
         };
       } catch (error) {
         console.error(
-          `[Simulator] Błąd finalizacji dostawy ${plannedFlight.shipment.delivery.id}:`,
+          `[Simulator] Błąd finalizacji dostawy ${plannedFlight.flight.deliveryId}:`,
           error,
         );
 
         return {
           kind: 'failed',
-          deliveryId: plannedFlight.shipment.delivery.id,
+          deliveryId: plannedFlight.flight.deliveryId,
           flight: plannedFlight.next.flight,
         };
       }
@@ -815,7 +771,7 @@ async function runFullFlowTelemetryIteration(
   }
 
   console.log(
-    `[Simulator] Tick ${state.tick}: aktywne loty ${state.activeFlightsByDeliveryId.size}, przesyłki gotowe ${shipments.length}`,
+    `[Simulator] Tick ${state.tick}: aktywne loty ${state.activeFlightsByDeliveryId.size}`,
   );
 }
 
@@ -949,6 +905,66 @@ async function runFullFlowIntakeIteration(
   }
 }
 
+async function reconcileFullFlowState(
+  config: SimulatorConfig,
+  state: SimulatorState,
+): Promise<void> {
+  const [currentShipments, currentDrones] = await Promise.all([
+    fetchShipmentsReady(config),
+    fetchDrones(config),
+  ]);
+
+  for (const shipment of currentShipments) {
+    state.knownDroneIds.add(shipment.delivery.droneId);
+  }
+
+  for (const drone of currentDrones) {
+    state.knownDroneIds.add(drone.droneId);
+  }
+
+  const droneByOrderId = new Map(currentDrones.map((drone) => [drone.orderId, drone]));
+
+  for (const shipment of currentShipments) {
+    const existingFlight = state.activeFlightsByDeliveryId.get(shipment.delivery.id);
+    const droneStatus = droneByOrderId.get(shipment.order.orderId) ?? null;
+
+    const originFromMemory = state.originByLandingPadId.get(shipment.order.landingPadId);
+    const fallbackOrigin = buildFallbackOrigin(shipment.order.destination, shipment.delivery.id);
+    const lastKnownPosition = state.lastPositionByDroneId.get(shipment.delivery.droneId);
+    const shouldUseLastKnownPosition = !existingFlight && Boolean(lastKnownPosition);
+
+    const origin =
+      (shouldUseLastKnownPosition ? lastKnownPosition : droneStatus?.origin) ??
+      existingFlight?.origin ??
+      originFromMemory ??
+      fallbackOrigin;
+    const currentPosition =
+      (shouldUseLastKnownPosition ? lastKnownPosition : droneStatus?.currentPosition) ??
+      existingFlight?.currentPosition ??
+      origin;
+
+    state.activeFlightsByDeliveryId.set(shipment.delivery.id, {
+      deliveryId: shipment.delivery.id,
+      orderId: shipment.order.orderId,
+      droneId: shipment.delivery.droneId,
+      landingPadId: shipment.order.landingPadId,
+      destinationLandingPadId: existingFlight?.destinationLandingPadId ?? null,
+      currentPosition,
+      origin,
+      destination: shipment.order.destination,
+      batteryLevel: droneStatus?.batteryLevel ?? existingFlight?.batteryLevel ?? 100,
+    });
+  }
+
+  for (const deliveryId of Array.from(state.activeFlightsByDeliveryId.keys())) {
+    const stillExists = currentShipments.some((shipment) => shipment.delivery.id === deliveryId);
+
+    if (!stillExists) {
+      state.activeFlightsByDeliveryId.delete(deliveryId);
+    }
+  }
+}
+
 let isIntakeRunning = false;
 const pendingIntakeTasks: IntakeTask[] = [];
 
@@ -1014,6 +1030,10 @@ async function executeTick(config: SimulatorConfig, state: SimulatorState): Prom
 
   try {
     if (config.mode === 'full-flow') {
+      if (state.tick % config.intakeEveryTicks === 0) {
+        void reconcileFullFlowState(config, state);
+      }
+
       await runFullFlowTelemetryIteration(config, state);
 
       const shouldRunIntake = state.tick % config.intakeEveryTicks === 0;
