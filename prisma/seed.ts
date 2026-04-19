@@ -95,7 +95,7 @@ async function main() {
         ownerId: regularUser1.id,
         name: 'Lądowisko Rynek Główny',
         description: 'Centralny punkt odbioru przy rynku.',
-        imageUrl: 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6',
+        imageUrl: 'https://images.unsplash.com/photo-1470115636492-6d2b56f9146d',
         latitude: 50.0614,
         longitude: 19.9372,
         type: 'SQUARE',

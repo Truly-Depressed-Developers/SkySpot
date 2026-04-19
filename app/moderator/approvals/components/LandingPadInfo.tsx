@@ -22,7 +22,7 @@ export function LandingPadInfo({ pad, typeLabels, accessOptions }: LandingPadInf
       </DetailSection>
 
       <DetailSection label="Opis punktu">
-        <div className="p-4 bg-muted/30 rounded-2xl border text-sm leading-relaxed text-muted-foreground">
+        <div className="p-4 bg-muted/30 rounded-2xl border text-lg font-medium">
           {pad.description || 'Brak opisu.'}
         </div>
       </DetailSection>
@@ -54,16 +54,14 @@ export function LandingPadInfo({ pad, typeLabels, accessOptions }: LandingPadInf
           {accessOptions.map((option) => (
             <div
               key={option.value}
-              className={`p-4 rounded-xl border flex items-center gap-3 ${
-                pad.availability === option.value
+              className={`p-4 rounded-xl border flex items-center gap-3 ${pad.availability === option.value
                   ? 'bg-muted border-foreground/20'
                   : 'opacity-40 border-border'
-              }`}
+                }`}
             >
               <div
-                className={`size-4 rounded-full border-2 flex items-center justify-center ${
-                  pad.availability === option.value ? 'border-foreground' : 'border-muted-foreground'
-                }`}
+                className={`size-4 rounded-full border-2 flex items-center justify-center ${pad.availability === option.value ? 'border-foreground' : 'border-muted-foreground'
+                  }`}
               >
                 {pad.availability === option.value && (
                   <div className="size-2 bg-foreground rounded-full" />
