@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { trpc } from '@/trpc/client';
 import { PageHeaderWithBack } from '@/components/FormHeader';
 
-import { LandingPadInfo } from './components/LandingPadInfo';
 import { LandingPadEditForm, LandingPadFormData } from './components/LandingPadEditForm';
 
 const landingPadTypeLabels: Record<LandingPadType, string> = {
@@ -103,10 +102,11 @@ export function LandingPadDetailsView({
         />
       ) : (
         <>
-          <LandingPadInfo
+          <LandingPadEditForm
             pad={pad}
             typeLabels={landingPadTypeLabels}
             accessOptions={accessOptions}
+            readonly
           />
 
           <footer className="fixed bottom-[50px] left-0 right-0 p-4 bg-background border-t flex flex-col gap-3 z-50 md:max-w-md md:mx-auto">
