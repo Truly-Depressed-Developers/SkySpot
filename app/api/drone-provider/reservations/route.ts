@@ -3,6 +3,7 @@ import { LandingPadStatus, OrderStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { authenticateDroneProviderRequest } from '@/lib/droneProviderApi';
+import { invalidateLandingPadAvailability } from '@/lib/landingPadAvailabilityCache';
 import { prisma } from '@/prisma/prisma';
 import { mapDeliveryToDTO } from '@/types/dtos';
 
@@ -55,19 +56,31 @@ export async function POST(request: Request) {
   });
 
   if (!order) {
-    return NextResponse.json({ success: false, error: 'Nie znaleziono zamówienia' }, { status: 404 });
+    return NextResponse.json(
+      { success: false, error: 'Nie znaleziono zamówienia' },
+      { status: 404 },
+    );
   }
 
   if (order.landingPad.status !== LandingPadStatus.ACCEPTED) {
-    return NextResponse.json({ success: false, error: 'Lądowisko nie jest zaakceptowane' }, { status: 409 });
+    return NextResponse.json(
+      { success: false, error: 'Lądowisko nie jest zaakceptowane' },
+      { status: 409 },
+    );
   }
 
   if (order.delivery) {
-    return NextResponse.json({ success: false, error: 'Zamówienie ma już przypisaną rezerwację' }, { status: 409 });
+    return NextResponse.json(
+      { success: false, error: 'Zamówienie ma już przypisaną rezerwację' },
+      { status: 409 },
+    );
   }
 
   if (order.status !== OrderStatus.ORDERED) {
-    return NextResponse.json({ success: false, error: 'Zamówienie nie może być już rezerwowane' }, { status: 409 });
+    return NextResponse.json(
+      { success: false, error: 'Zamówienie nie może być już rezerwowane' },
+      { status: 409 },
+    );
   }
 
   const conflictingDelivery = await prisma.delivery.findFirst({
@@ -91,7 +104,10 @@ export async function POST(request: Request) {
   });
 
   if (conflictingDelivery) {
-    return NextResponse.json({ success: false, error: 'Lądowisko jest zajęte w tym terminie' }, { status: 409 });
+    return NextResponse.json(
+      { success: false, error: 'Lądowisko jest zajęte w tym terminie' },
+      { status: 409 },
+    );
   }
 
   const delivery = await prisma.delivery.create({
@@ -109,6 +125,8 @@ export async function POST(request: Request) {
     where: { orderId: order.orderId },
     data: { status: OrderStatus.PREPARING },
   });
+
+  invalidateLandingPadAvailability(order.landingPadId);
 
   return NextResponse.json({ success: true, data: mapDeliveryToDTO(delivery) });
 }

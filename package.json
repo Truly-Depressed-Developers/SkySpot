@@ -17,6 +17,7 @@
     "db:migrate": "prisma migrate dev --name",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
+    "sim": "tsx lib/droneSimulator.ts -- --api-key ck_live_provider1_hacknarok2026 --mode full-flow",
     "simulate": "tsx lib/droneSimulator.ts",
     "preinstall": "node -e \"if(process.env.npm_execpath.indexOf('pnpm') === -1) throw new Error('You must use PNPM to install')\""
   },

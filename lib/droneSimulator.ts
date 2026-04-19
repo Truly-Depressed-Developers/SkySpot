@@ -83,25 +83,6 @@ const nearbyLandingPadsResponseSchema = z.object({
   ),
 });
 
-const availabilityResponseSchema = z.object({
-  success: z.boolean(),
-  data: z.object({
-    landingPadId: z.string(),
-    available: z.boolean(),
-    landingPadStatus: z.string(),
-    conflictingReservations: z.array(
-      z.object({
-        id: z.string(),
-        landingPadId: z.string(),
-        droneProviderId: z.string(),
-        droneId: z.string(),
-        reservedFrom: z.coerce.date(),
-        reservedTo: z.coerce.date(),
-      }),
-    ),
-  }),
-});
-
 const confirmDeliveryResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
@@ -117,11 +98,40 @@ type OrderDTO = z.infer<typeof orderSchema>;
 type DeliveryDTO = z.infer<typeof deliverySchema>;
 type NearbyLandingPadDTO = z.infer<typeof nearbyLandingPadsResponseSchema>['data'][number];
 
+type TelemetryPatchDTO = {
+  droneId: string;
+  orderId?: string;
+  currentPosition?: CoordsDTO;
+  batteryLevel?: number;
+  origin?: CoordsDTO;
+  destination?: CoordsDTO;
+};
+
+type ShipmentProcessingResult =
+  | {
+      kind: 'arrived';
+      deliveryId: string;
+      droneId: string;
+      destinationLandingPadId: string | null;
+      currentPosition: CoordsDTO;
+    }
+  | {
+      kind: 'active';
+      deliveryId: string;
+      flight: ActiveFlight;
+    }
+  | {
+      kind: 'failed';
+      deliveryId: string;
+      flight: ActiveFlight;
+    };
+
 type ActiveFlight = {
   deliveryId: string;
   orderId: string;
   droneId: string;
   landingPadId: string;
+  destinationLandingPadId: string | null;
   currentPosition: CoordsDTO;
   origin: CoordsDTO;
   destination: CoordsDTO;
@@ -141,6 +151,9 @@ type SimulatorState = {
   tick: number;
   activeFlightsByDeliveryId: Map<string, ActiveFlight>;
   originByLandingPadId: Map<string, CoordsDTO>;
+  lastLandingPadIdByDroneId: Map<string, string>;
+  lastPositionByDroneId: Map<string, CoordsDTO>;
+  lastSentTelemetryByDroneId: Map<string, DroneStatusDTO>;
   knownDroneIds: Set<string>;
 };
 
@@ -220,7 +233,11 @@ function buildConfig(): SimulatorConfig {
   const mode = parseModeArg(parseOptionalArg('--mode', args));
   const apiKey = parseRequiredArg('--api-key', args);
   const baseUrl = (parseOptionalArg('--base-url', args) ?? defaultBaseUrl).replace(/\/$/, '');
-  const intervalMs = parseNumberArg(parseOptionalArg('--interval-ms', args), defaultIntervalMs, '--interval-ms');
+  const intervalMs = parseNumberArg(
+    parseOptionalArg('--interval-ms', args),
+    defaultIntervalMs,
+    '--interval-ms',
+  );
   const step = parseNumberArg(parseOptionalArg('--step', args), defaultStep, '--step');
   const targetFlights = parseTargetFlightsArg(parseOptionalArg('--target-flights', args));
 
@@ -270,7 +287,11 @@ async function requestWithAuth(
   });
 }
 
-async function parseOkJson<T>(response: Response, schema: z.ZodSchema<T>, endpointName: string): Promise<T> {
+async function parseOkJson<T>(
+  response: Response,
+  schema: z.ZodSchema<T>,
+  endpointName: string,
+): Promise<T> {
   if (!response.ok) {
     const body = await readErrorBody(response);
     throw new Error(`Błąd endpointu ${endpointName} (${response.status}): ${body}`);
@@ -299,16 +320,83 @@ async function fetchDrones(config: SimulatorConfig): Promise<DroneStatusDTO[]> {
   return parsed.data;
 }
 
-async function sendTelemetry(config: SimulatorConfig, drone: DroneStatusDTO): Promise<void> {
-  const response = await requestWithAuth(config, '/api/drone-provider/telemetry', {
-    method: 'POST',
-    body: JSON.stringify({
+function areCoordsEqual(a: CoordsDTO, b: CoordsDTO): boolean {
+  return a.lat === b.lat && a.lng === b.lng;
+}
+
+function buildTelemetryPatch(drone: DroneStatusDTO, state: SimulatorState): TelemetryPatchDTO {
+  const previousTelemetry = state.lastSentTelemetryByDroneId.get(drone.droneId);
+
+  if (!previousTelemetry) {
+    return {
       droneId: drone.droneId,
       orderId: drone.orderId,
       currentPosition: drone.currentPosition,
       batteryLevel: drone.batteryLevel,
       origin: drone.origin,
       destination: drone.destination,
+    };
+  }
+
+  const patch: TelemetryPatchDTO = {
+    droneId: drone.droneId,
+  };
+
+  if (previousTelemetry.orderId !== drone.orderId) {
+    patch.orderId = drone.orderId;
+  }
+
+  if (!areCoordsEqual(previousTelemetry.currentPosition, drone.currentPosition)) {
+    patch.currentPosition = drone.currentPosition;
+  }
+
+  if (previousTelemetry.batteryLevel !== drone.batteryLevel) {
+    patch.batteryLevel = drone.batteryLevel;
+  }
+
+  if (!areCoordsEqual(previousTelemetry.origin, drone.origin)) {
+    patch.origin = drone.origin;
+  }
+
+  if (!areCoordsEqual(previousTelemetry.destination, drone.destination)) {
+    patch.destination = drone.destination;
+  }
+
+  return patch;
+}
+
+function storeLastSentTelemetry(state: SimulatorState, drones: DroneStatusDTO[]): void {
+  for (const drone of drones) {
+    state.lastSentTelemetryByDroneId.set(drone.droneId, {
+      ...drone,
+      currentPosition: {
+        ...drone.currentPosition,
+      },
+      origin: {
+        ...drone.origin,
+      },
+      destination: {
+        ...drone.destination,
+      },
+    });
+  }
+}
+
+async function sendTelemetryBatch(
+  config: SimulatorConfig,
+  state: SimulatorState,
+  drones: DroneStatusDTO[],
+): Promise<void> {
+  if (drones.length === 0) {
+    return;
+  }
+
+  const updates = drones.map((drone) => buildTelemetryPatch(drone, state));
+
+  const response = await requestWithAuth(config, '/api/drone-provider/telemetry', {
+    method: 'POST',
+    body: JSON.stringify({
+      updates,
     }),
   });
 
@@ -316,6 +404,8 @@ async function sendTelemetry(config: SimulatorConfig, drone: DroneStatusDTO): Pr
     const body = await readErrorBody(response);
     throw new Error(`Nie udało się zapisać telemetrii (${response.status}): ${body}`);
   }
+
+  storeLastSentTelemetry(state, drones);
 }
 
 async function fetchShipmentsReady(config: SimulatorConfig): Promise<ShipmentDTO[]> {
@@ -385,66 +475,25 @@ async function findNearbyLandingPads(config: SimulatorConfig, destination: Coord
   return parsed.data;
 }
 
-async function checkAvailability(
-  config: SimulatorConfig,
-  landingPadId: string,
-  from: Date,
-  to: Date,
-): Promise<boolean> {
-  const params = new URLSearchParams({
-    from: from.toISOString(),
-    to: to.toISOString(),
-  });
-
-  const response = await requestWithAuth(
-    config,
-    `/api/drone-provider/landing-pads/${landingPadId}/availability?${params.toString()}`,
-    {
-      method: 'GET',
-    },
-  );
-  const parsed = await parseOkJson(
-    response,
-    availabilityResponseSchema,
-    '/landing-pads/[id]/availability',
-  );
-
-  if (!parsed.success) {
-    throw new Error('Endpoint /landing-pads/[id]/availability zwrócił success=false');
-  }
-
-  return parsed.data.available;
-}
-
-async function selectAvailableLandingPad(
-  config: SimulatorConfig,
+function pickDestinationPad(
   nearbyPads: NearbyLandingPadDTO[],
   excludedLandingPadId: string,
-): Promise<NearbyLandingPadDTO | null> {
-  const now = new Date();
-  const from = new Date(now.getTime() + 60_000);
-  const to = new Date(now.getTime() + 2 * 60_000);
+  offset: number,
+): NearbyLandingPadDTO | null {
+  const candidates = nearbyPads.filter((landingPad) => landingPad.id !== excludedLandingPadId);
 
-  for (const landingPad of nearbyPads) {
-    if (landingPad.id === excludedLandingPadId) {
-      continue;
-    }
-
-    const isAvailable = await checkAvailability(config, landingPad.id, from, to);
-
-    if (isAvailable) {
-      return landingPad;
-    }
+  if (candidates.length === 0) {
+    return null;
   }
 
-  return null;
+  return candidates[offset % candidates.length] ?? null;
 }
 
 async function createReservation(
   config: SimulatorConfig,
   orderId: string,
   droneId: string,
-): Promise<DeliveryDTO> {
+): Promise<DeliveryDTO | null> {
   const now = new Date();
   const reservedFrom = new Date(now.getTime() + 60_000);
   const reservedTo = new Date(now.getTime() + 2 * 60_000);
@@ -458,6 +507,11 @@ async function createReservation(
       reservedTo: reservedTo.toISOString(),
     }),
   });
+
+  if (response.status === 409) {
+    return null;
+  }
+
   const parsed = await parseOkJson(response, reservationResponseSchema, '/reservations');
 
   if (!parsed.success) {
@@ -509,7 +563,8 @@ function nextDroneState(drone: DroneStatusDTO, step: number): DroneStatusDTO {
   const ratio = step / distance;
   const newLat = drone.currentPosition.lat + dLat * ratio;
   const newLng = drone.currentPosition.lng + dLng * ratio;
-  const batteryLevel = Math.random() > 0.9 ? Math.max(0, drone.batteryLevel - 1) : drone.batteryLevel;
+  const batteryLevel =
+    Math.random() > 0.9 ? Math.max(0, drone.batteryLevel - 1) : drone.batteryLevel;
 
   return {
     ...drone,
@@ -521,7 +576,10 @@ function nextDroneState(drone: DroneStatusDTO, step: number): DroneStatusDTO {
   };
 }
 
-function calculateNextFlightState(flight: ActiveFlight, step: number): {
+function calculateNextFlightState(
+  flight: ActiveFlight,
+  step: number,
+): {
   flight: ActiveFlight;
   arrived: boolean;
 } {
@@ -545,7 +603,8 @@ function calculateNextFlightState(flight: ActiveFlight, step: number): {
   const ratio = step / distance;
   const newLat = flight.currentPosition.lat + dLat * ratio;
   const newLng = flight.currentPosition.lng + dLng * ratio;
-  const batteryLevel = Math.random() > 0.9 ? Math.max(0, flight.batteryLevel - 1) : flight.batteryLevel;
+  const batteryLevel =
+    Math.random() > 0.9 ? Math.max(0, flight.batteryLevel - 1) : flight.batteryLevel;
 
   return {
     flight: {
@@ -579,17 +638,22 @@ function buildFallbackOrigin(destination: CoordsDTO, deliveryId: string): Coords
   };
 }
 
-async function runTelemetryOnlyIteration(config: SimulatorConfig): Promise<void> {
+async function runTelemetryOnlyIteration(
+  config: SimulatorConfig,
+  state: SimulatorState,
+): Promise<void> {
   const drones = await fetchDrones(config);
+  const updatesToSend: DroneStatusDTO[] = [];
 
   for (const drone of drones) {
     const updatedDrone = nextDroneState(drone, config.step);
+    updatesToSend.push(updatedDrone);
+  }
 
-    try {
-      await sendTelemetry(config, updatedDrone);
-    } catch (error) {
-      console.error(`[Simulator] Błąd wysyłki telemetrii dla drona ${drone.droneId}:`, error);
-    }
+  try {
+    await sendTelemetryBatch(config, state, updatesToSend);
+  } catch (error) {
+    console.error('[Simulator] Błąd batchowej wysyłki telemetrii:', error);
   }
 }
 
@@ -598,6 +662,7 @@ async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorSta
     fetchShipmentsReady(config),
     fetchDrones(config),
   ]);
+  const createdShipments: ShipmentDTO[] = [];
 
   for (const shipment of currentShipments) {
     state.knownDroneIds.add(shipment.delivery.droneId);
@@ -609,7 +674,9 @@ async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorSta
 
   const targetFlights = config.targetFlights ?? state.knownDroneIds.size;
   const busyDroneIds = new Set(currentShipments.map((shipment) => shipment.delivery.droneId));
-  const freeDroneIds = Array.from(state.knownDroneIds).filter((droneId) => !busyDroneIds.has(droneId));
+  const freeDroneIds = Array.from(state.knownDroneIds).filter(
+    (droneId) => !busyDroneIds.has(droneId),
+  );
   const missingFlights = Math.max(0, targetFlights - currentShipments.length);
 
   if (missingFlights > 0 && freeDroneIds.length > 0) {
@@ -629,19 +696,54 @@ async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorSta
 
         for (let i = 0; i < createLimit; i += 1) {
           const droneId = freeDroneIds[i];
-          const destinationPad = nearbyPads[(state.tick + i) % nearbyPads.length];
-          const destination = destinationPad.coords;
-          const selectedPad = await selectAvailableLandingPad(config, nearbyPads, destinationPad.id);
+          const preferredStartPadId = state.lastLandingPadIdByDroneId.get(droneId);
 
-          if (!selectedPad) {
-            console.log('[Simulator] Brak dostępnego lądowiska dla nowego zlecenia w tym ticku.');
+          if (
+            preferredStartPadId &&
+            !nearbyPads.some((landingPad) => landingPad.id === preferredStartPadId)
+          ) {
+            console.log(
+              `[Simulator] Pomijam tworzenie lotu dla drona ${droneId}, bo ostatnie lądowisko ${preferredStartPadId} nie jest dostępne w aktualnym obszarze symulacji.`,
+            );
             continue;
           }
+
+          const preferredStartPad = preferredStartPadId
+            ? (nearbyPads.find((landingPad) => landingPad.id === preferredStartPadId) ?? null)
+            : null;
+          const fallbackStartPad = nearbyPads[(state.tick + i) % nearbyPads.length] ?? null;
+          const selectedPad = preferredStartPad ?? fallbackStartPad;
+
+          if (!selectedPad) {
+            console.log('[Simulator] Brak lądowiska startowego dla nowego zlecenia.');
+            continue;
+          }
+
+          const destinationPad = pickDestinationPad(nearbyPads, selectedPad.id, state.tick + i + 1);
+
+          if (!destinationPad) {
+            console.log('[Simulator] Brak lądowiska docelowego różnego od startowego.');
+            continue;
+          }
+
+          const destination = destinationPad.coords;
 
           state.originByLandingPadId.set(selectedPad.id, selectedPad.coords);
 
           const order = await createIntakeOrder(config, state, destination, selectedPad.id);
           const delivery = await createReservation(config, order.orderId, droneId);
+
+          if (!delivery) {
+            console.log(
+              `[Simulator] Pomijam lot dla zamówienia ${order.orderId}, bo lądowisko ${selectedPad.id} zostało zajęte (409).`,
+            );
+            continue;
+          }
+
+          createdShipments.push({
+            delivery,
+            order,
+          });
           const preferredOrigin = state.originByLandingPadId.get(order.landingPadId);
           const fallbackOrigin = selectedPad.coords;
 
@@ -650,6 +752,7 @@ async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorSta
             orderId: order.orderId,
             droneId: delivery.droneId,
             landingPadId: order.landingPadId,
+            destinationLandingPadId: destinationPad.id,
             currentPosition: preferredOrigin ?? fallbackOrigin,
             origin: preferredOrigin ?? fallbackOrigin,
             destination: order.destination,
@@ -672,54 +775,136 @@ async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorSta
     }
   }
 
-  const shipments = await fetchShipmentsReady(config);
-  const drones = await fetchDrones(config);
+  const shipments = [...currentShipments, ...createdShipments];
+  const drones = currentDrones;
   const droneByOrderId = new Map(drones.map((drone) => [drone.orderId, drone]));
-  const activeDeliveryIds = new Set<string>();
+  const activeDeliveryIds = new Set(shipments.map((shipment) => shipment.delivery.id));
 
-  for (const shipment of shipments) {
-    activeDeliveryIds.add(shipment.delivery.id);
-
+  const plannedFlights = shipments.map((shipment) => {
     const existingFlight = state.activeFlightsByDeliveryId.get(shipment.delivery.id);
     const droneStatus = droneByOrderId.get(shipment.order.orderId);
 
     const originFromMemory = state.originByLandingPadId.get(shipment.order.landingPadId);
     const fallbackOrigin = buildFallbackOrigin(shipment.order.destination, shipment.delivery.id);
-    const origin = droneStatus?.origin ?? existingFlight?.origin ?? originFromMemory ?? fallbackOrigin;
+    const lastKnownPosition = state.lastPositionByDroneId.get(shipment.delivery.droneId);
+    const shouldUseLastKnownPosition = !existingFlight && Boolean(lastKnownPosition);
+
+    const origin =
+      (shouldUseLastKnownPosition ? lastKnownPosition : droneStatus?.origin) ??
+      existingFlight?.origin ??
+      originFromMemory ??
+      fallbackOrigin;
     const currentPosition =
-      droneStatus?.currentPosition ?? existingFlight?.currentPosition ?? origin;
+      (shouldUseLastKnownPosition ? lastKnownPosition : droneStatus?.currentPosition) ??
+      existingFlight?.currentPosition ??
+      origin;
 
     const flight: ActiveFlight = {
       deliveryId: shipment.delivery.id,
       orderId: shipment.order.orderId,
       droneId: shipment.delivery.droneId,
       landingPadId: shipment.order.landingPadId,
+      destinationLandingPadId: existingFlight?.destinationLandingPadId ?? null,
       currentPosition,
       origin,
       destination: shipment.order.destination,
       batteryLevel: droneStatus?.batteryLevel ?? existingFlight?.batteryLevel ?? 100,
     };
 
-    const next = calculateNextFlightState(flight, config.step);
+    return {
+      shipment,
+      next: calculateNextFlightState(flight, config.step),
+    };
+  });
 
-    if (next.arrived) {
+  const telemetryBatch = plannedFlights.map((plannedFlight) =>
+    toDroneTelemetry(plannedFlight.next.flight),
+  );
+
+  try {
+    await sendTelemetryBatch(config, state, telemetryBatch);
+  } catch (error) {
+    console.error('[Simulator] Błąd batchowej telemetrii dla lotów full-flow:', error);
+
+    for (const plannedFlight of plannedFlights) {
+      state.activeFlightsByDeliveryId.set(
+        plannedFlight.shipment.delivery.id,
+        plannedFlight.next.flight,
+      );
+      state.lastPositionByDroneId.set(
+        plannedFlight.next.flight.droneId,
+        plannedFlight.next.flight.currentPosition,
+      );
+    }
+
+    console.log(
+      `[Simulator] Tick ${state.tick}: aktywne loty ${state.activeFlightsByDeliveryId.size}, przesyłki gotowe ${shipments.length}`,
+    );
+    return;
+  }
+
+  const shipmentResults: ShipmentProcessingResult[] = [];
+  const arrivedFlights = plannedFlights.filter((plannedFlight) => plannedFlight.next.arrived);
+  const activeFlights = plannedFlights.filter((plannedFlight) => !plannedFlight.next.arrived);
+
+  for (const plannedFlight of activeFlights) {
+    shipmentResults.push({
+      kind: 'active',
+      deliveryId: plannedFlight.shipment.delivery.id,
+      flight: plannedFlight.next.flight,
+    });
+  }
+
+  const arrivedResults = await Promise.all(
+    arrivedFlights.map(async (plannedFlight): Promise<ShipmentProcessingResult> => {
       try {
-        await sendTelemetry(config, toDroneTelemetry(next.flight));
-        await confirmDelivery(config, shipment.delivery.id);
-        state.activeFlightsByDeliveryId.delete(shipment.delivery.id);
-        console.log(`[Simulator] Potwierdzono dostawę ${shipment.delivery.id}.`);
+        await confirmDelivery(config, plannedFlight.shipment.delivery.id);
+        console.log(`[Simulator] Potwierdzono dostawę ${plannedFlight.shipment.delivery.id}.`);
+
+        return {
+          kind: 'arrived',
+          deliveryId: plannedFlight.shipment.delivery.id,
+          droneId: plannedFlight.next.flight.droneId,
+          destinationLandingPadId: plannedFlight.next.flight.destinationLandingPadId,
+          currentPosition: plannedFlight.next.flight.currentPosition,
+        };
       } catch (error) {
-        console.error(`[Simulator] Błąd finalizacji dostawy ${shipment.delivery.id}:`, error);
+        console.error(
+          `[Simulator] Błąd finalizacji dostawy ${plannedFlight.shipment.delivery.id}:`,
+          error,
+        );
+
+        return {
+          kind: 'failed',
+          deliveryId: plannedFlight.shipment.delivery.id,
+          flight: plannedFlight.next.flight,
+        };
+      }
+    }),
+  );
+
+  shipmentResults.push(...arrivedResults);
+
+  for (const result of shipmentResults) {
+    if (result.kind === 'arrived') {
+      if (result.destinationLandingPadId) {
+        state.lastLandingPadIdByDroneId.set(result.droneId, result.destinationLandingPadId);
       }
 
+      state.lastPositionByDroneId.set(result.droneId, result.currentPosition);
+      state.activeFlightsByDeliveryId.delete(result.deliveryId);
       continue;
     }
 
-    try {
-      await sendTelemetry(config, toDroneTelemetry(next.flight));
-      state.activeFlightsByDeliveryId.set(shipment.delivery.id, next.flight);
-    } catch (error) {
-      console.error(`[Simulator] Błąd telemetrii dla dostawy ${shipment.delivery.id}:`, error);
+    if (result.kind === 'active') {
+      state.lastPositionByDroneId.set(result.flight.droneId, result.flight.currentPosition);
+      state.activeFlightsByDeliveryId.set(result.deliveryId, result.flight);
+      continue;
+    }
+
+    if (result.kind === 'failed') {
+      state.lastPositionByDroneId.set(result.flight.droneId, result.flight.currentPosition);
+      state.activeFlightsByDeliveryId.set(result.deliveryId, result.flight);
     }
   }
 
@@ -734,11 +919,54 @@ async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorSta
   );
 }
 
-async function runIteration(config: SimulatorConfig): Promise<void> {
-  await runTelemetryOnlyIteration(config);
+async function runIteration(config: SimulatorConfig, state: SimulatorState): Promise<void> {
+  await runTelemetryOnlyIteration(config, state);
 }
 
 let isRunning = false;
+let pendingTicks = 0;
+let lastTickStartedAt: number | null = null;
+
+async function executeTick(config: SimulatorConfig, state: SimulatorState): Promise<void> {
+  const now = Date.now();
+  const elapsedFromPreviousTick = lastTickStartedAt === null ? null : now - lastTickStartedAt;
+  const elapsedLabel =
+    elapsedFromPreviousTick === null ? 'pierwszy tick' : `${elapsedFromPreviousTick}ms`;
+
+  console.log(
+    `[Simulator] Start tick ${state.tick + 1}. Od poprzedniego ticka minęło: ${elapsedLabel}`,
+  );
+  lastTickStartedAt = now;
+
+  try {
+    if (config.mode === 'full-flow') {
+      await runFullFlowIteration(config, state);
+    } else {
+      await runIteration(config, state);
+    }
+
+    state.tick += 1;
+  } catch (error) {
+    console.error('[Simulator] Błąd podczas iteracji:', error);
+  }
+}
+
+async function processPendingTicks(config: SimulatorConfig, state: SimulatorState): Promise<void> {
+  if (isRunning) {
+    return;
+  }
+
+  isRunning = true;
+
+  try {
+    while (pendingTicks > 0) {
+      pendingTicks -= 1;
+      await executeTick(config, state);
+    }
+  } finally {
+    isRunning = false;
+  }
+}
 
 async function main() {
   let config: SimulatorConfig;
@@ -755,7 +983,8 @@ async function main() {
   console.log('--- Symulator Dronów Hacknarok 2026 ---');
   console.log('Tryb:', config.mode);
   console.log('Adres API:', config.baseUrl);
-  const targetFlightsLabel = config.targetFlights === null ? 'wszystkie wykryte drony' : config.targetFlights;
+  const targetFlightsLabel =
+    config.targetFlights === null ? 'wszystkie wykryte drony' : config.targetFlights;
   console.log(
     'Częstotliwość:',
     `${config.intervalMs}ms`,
@@ -770,29 +999,15 @@ async function main() {
     tick: 0,
     activeFlightsByDeliveryId: new Map(),
     originByLandingPadId: new Map(),
+    lastLandingPadIdByDroneId: new Map(),
+    lastPositionByDroneId: new Map(),
+    lastSentTelemetryByDroneId: new Map(),
     knownDroneIds: new Set(),
   };
 
-  setInterval(async () => {
-    if (isRunning) {
-      return;
-    }
-
-    isRunning = true;
-
-    try {
-      if (config.mode === 'full-flow') {
-        await runFullFlowIteration(config, state);
-      } else {
-        await runIteration(config);
-      }
-
-      state.tick += 1;
-    } catch (error) {
-      console.error('[Simulator] Błąd podczas iteracji:', error);
-    } finally {
-      isRunning = false;
-    }
+  setInterval(() => {
+    pendingTicks += 1;
+    void processPendingTicks(config, state);
   }, config.intervalMs);
 }
 

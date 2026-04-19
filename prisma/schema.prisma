@@ -21,6 +21,8 @@ model User {
   providerDeliveries Delivery[]      @relation("DeliveryProvider")
   landingPads        LandingPad[]
   companyApiKeys     CompanyApiKey[]
+
+  @@index([role, createdAt])
 }
 
 model Session {
@@ -87,6 +89,7 @@ model Order {
 
   @@index([userId])
   @@index([landingPadId])
+  @@index([status, createdAt])
 }
 
 model DeliveryRating {
@@ -116,6 +119,7 @@ model Delivery {
 
   @@index([landingPadId, reservedFrom, reservedTo])
   @@index([droneProviderId])
+  @@index([droneProviderId, createdAt])
 }
 
 model DroneStatus {
@@ -131,6 +135,8 @@ model DroneStatus {
   updatedAt            DateTime @updatedAt
 
   order Order @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+
+  @@index([updatedAt])
 }
 
 enum UserRole {

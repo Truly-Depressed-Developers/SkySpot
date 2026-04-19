@@ -15,10 +15,13 @@ import { DroneMarker } from '@/components/map/DroneMarker';
 import { BaseLayers } from '@/components/map/BaseLayers';
 import { KRAKOW_COORDINATES } from '@/components/map/mapConfig';
 
+const DRONE_MAP_REFETCH_INTERVAL_MS = 2000;
+
 export default function MapPage() {
   const { data: landingPads, isLoading: isLoadingPads } = trpc.landingPad.getAll.useQuery();
   const { data: drones, isLoading: isLoadingDrones } = trpc.droneStatus.getAllMine.useQuery(undefined, {
-    refetchInterval: 100, // Odświeżaj co sekundę dla idealnej płynności ruchu
+    refetchInterval: DRONE_MAP_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: true,
   });
 
   const isLoading = isLoadingPads || isLoadingDrones;
@@ -28,7 +31,7 @@ export default function MapPage() {
       <PageHeader title="Mapa lądowisk" />
       <main className="flex-1 flex items-center flex-col justify-center border-2 border-dashed rounded-lg mt-4 overflow-hidden relative">
         {isLoading && (
-          <div className="absolute inset-0 z-[1001] bg-background/50 flex items-center justify-center backdrop-blur-sm">
+          <div className="absolute inset-0 z-1001 bg-background/50 flex items-center justify-center backdrop-blur-sm">
             <Badge variant="outline" className="animate-pulse">Ładowanie danych mapy...</Badge>
           </div>
         )}

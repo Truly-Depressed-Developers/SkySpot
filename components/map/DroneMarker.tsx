@@ -29,7 +29,7 @@ function calculateBearing(start: LatLngLiteral, dest: LatLngLiteral): number {
 export function DroneMarker({ drone }: DroneMarkerProps) {
   const { data: session } = useSession();
   const isUser = session?.user?.role === UserRole.USER;
-  
+
   const rotationAngle = calculateBearing(drone.currentPosition, drone.destination);
 
   return (

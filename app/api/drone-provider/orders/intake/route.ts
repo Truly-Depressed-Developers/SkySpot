@@ -18,6 +18,40 @@ const intakeSchema = z.object({
   description: z.string().min(1),
 });
 
+const defaultUserCacheTtlMs = 30_000;
+let cachedDefaultUserId: string | null = null;
+let cachedDefaultUserIdExpiresAt = 0;
+
+async function getDefaultUserId(): Promise<string | null> {
+  const now = Date.now();
+
+  if (cachedDefaultUserId && now < cachedDefaultUserIdExpiresAt) {
+    return cachedDefaultUserId;
+  }
+
+  const user = await prisma.user.findFirst({
+    where: {
+      role: UserRole.USER,
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!user) {
+    cachedDefaultUserId = null;
+    cachedDefaultUserIdExpiresAt = 0;
+    return null;
+  }
+
+  cachedDefaultUserId = user.id;
+  cachedDefaultUserIdExpiresAt = now + defaultUserCacheTtlMs;
+  return user.id;
+}
+
 export async function POST(request: Request) {
   const auth = await authenticateDroneProviderRequest(request);
 
@@ -42,27 +76,33 @@ export async function POST(request: Request) {
     );
   }
 
-  const user = parsed.data.userId
-    ? await prisma.user.findFirst({
-        where: {
-          id: parsed.data.userId,
-          role: UserRole.USER,
-        },
-        select: {
-          id: true,
-        },
-      })
-    : await prisma.user.findFirst({
-        where: {
-          role: UserRole.USER,
-        },
-        orderBy: {
-          createdAt: 'asc',
-        },
-        select: {
-          id: true,
-        },
-      });
+  const userPromise: Promise<{ id: string } | null> = parsed.data.userId
+    ? prisma.user
+        .findUnique({
+          where: {
+            id: parsed.data.userId,
+          },
+          select: {
+            id: true,
+            role: true,
+          },
+        })
+        .then((userResult) =>
+          userResult && userResult.role === UserRole.USER ? { id: userResult.id } : null,
+        )
+    : getDefaultUserId().then((defaultUserId) => (defaultUserId ? { id: defaultUserId } : null));
+
+  const landingPadPromise = prisma.landingPad.findUnique({
+    where: {
+      id: parsed.data.landingPadId,
+    },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  const [user, landingPad] = await Promise.all([userPromise, landingPadPromise]);
 
   if (!user) {
     return NextResponse.json(
@@ -76,22 +116,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const landingPad = await prisma.landingPad.findFirst({
-    where: {
-      id: parsed.data.landingPadId,
-    },
-    select: {
-      id: true,
-      status: true,
-    },
-  });
-
   if (!landingPad) {
-    return NextResponse.json({ success: false, error: 'Nie znaleziono lądowiska' }, { status: 404 });
+    return NextResponse.json(
+      { success: false, error: 'Nie znaleziono lądowiska' },
+      { status: 404 },
+    );
   }
 
   if (landingPad.status !== LandingPadStatus.ACCEPTED) {
-    return NextResponse.json({ success: false, error: 'Lądowisko nie jest zaakceptowane' }, { status: 409 });
+    return NextResponse.json(
+      { success: false, error: 'Lądowisko nie jest zaakceptowane' },
+      { status: 409 },
+    );
   }
 
   const order = await prisma.order.create({

@@ -3,6 +3,10 @@ import { LandingPadStatus, OrderStatus } from '@prisma/client';
 import { z } from 'zod';
 
 import { authenticateDroneProviderRequest } from '@/lib/droneProviderApi';
+import {
+  getCachedLandingPadAvailability,
+  setCachedLandingPadAvailability,
+} from '@/lib/landingPadAvailabilityCache';
 import { prisma } from '@/prisma/prisma';
 import { mapDeliveryToLandingPadReservationDTO } from '@/types/dtos';
 
@@ -32,7 +36,11 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   if (!parsed.success) {
     return NextResponse.json(
-      { success: false, error: 'Nieprawidłowe parametry zapytania', issues: parsed.error.flatten() },
+      {
+        success: false,
+        error: 'Nieprawidłowe parametry zapytania',
+        issues: parsed.error.flatten(),
+      },
       { status: 400 },
     );
   }
@@ -51,7 +59,24 @@ export async function GET(request: Request, { params }: RouteParams) {
   });
 
   if (!landingPad) {
-    return NextResponse.json({ success: false, error: 'Nie znaleziono lądowiska' }, { status: 404 });
+    return NextResponse.json(
+      { success: false, error: 'Nie znaleziono lądowiska' },
+      { status: 404 },
+    );
+  }
+
+  const cacheInput = {
+    landingPadId: landingPad.id,
+    from: parsed.data.from,
+    to: parsed.data.to,
+  };
+  const cachedData = getCachedLandingPadAvailability(cacheInput);
+
+  if (cachedData) {
+    return NextResponse.json({
+      success: true,
+      data: cachedData,
+    });
   }
 
   const conflicts = await prisma.delivery.findMany({
@@ -72,14 +97,17 @@ export async function GET(request: Request, { params }: RouteParams) {
   });
 
   const available = landingPad.status === LandingPadStatus.ACCEPTED && conflicts.length === 0;
+  const responseData = {
+    landingPadId: landingPad.id,
+    available,
+    landingPadStatus: landingPad.status,
+    conflictingReservations: conflicts.map(mapDeliveryToLandingPadReservationDTO),
+  };
+
+  setCachedLandingPadAvailability(cacheInput, responseData);
 
   return NextResponse.json({
     success: true,
-    data: {
-      landingPadId: landingPad.id,
-      available,
-      landingPadStatus: landingPad.status,
-      conflictingReservations: conflicts.map(mapDeliveryToLandingPadReservationDTO),
-    },
+    data: responseData,
   });
 }
