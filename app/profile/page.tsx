@@ -1,6 +1,7 @@
 'use client';
 
 import { SettingsItem } from '@/components/settings/SettingsItem';
+import { UserRole } from '@prisma/client';
 import {
   GearIcon,
   SunIcon,
@@ -11,6 +12,7 @@ import { PageHeader } from '@/components/PageHeader';
 
 export default function ProfilePage() {
   const { data: session } = useSession();
+  const isDroneProvider = session?.user?.role === UserRole.DRONE_PROVIDER;
 
   const settingsOptions = [
     {
@@ -24,6 +26,14 @@ export default function ProfilePage() {
       href: '/profile/settings',
     },
   ];
+
+  if (isDroneProvider) {
+    settingsOptions.push({
+      label: 'API',
+      icon: GearIcon,
+      href: '/company/settings',
+    });
+  }
 
   return (
     <div className="flex flex-col min-h-dvh bg-background">
