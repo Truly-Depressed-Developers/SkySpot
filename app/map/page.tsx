@@ -15,7 +15,7 @@ import { DroneMarker } from '@/components/map/DroneMarker';
 import { BaseLayers } from '@/components/map/BaseLayers';
 import { KRAKOW_COORDINATES } from '@/components/map/mapConfig';
 
-const DRONE_MAP_REFETCH_INTERVAL_MS = 2000;
+const DRONE_MAP_REFETCH_INTERVAL_MS = 1000;
 
 export default function MapPage() {
   const { data: landingPads, isLoading: isLoadingPads } = trpc.landingPad.getAll.useQuery();

@@ -3,6 +3,7 @@ import { z } from 'zod';
 const defaultMode = 'full-flow';
 const defaultStep = 0.005;
 const defaultIntervalMs = 1000;
+const defaultIntakeEveryTicks = 5;
 const defaultBaseUrl = 'http://localhost:3000';
 const krakowCenterLat = 50.06143;
 const krakowCenterLng = 19.93658;
@@ -143,6 +144,7 @@ type SimulatorConfig = {
   apiKey: string;
   baseUrl: string;
   intervalMs: number;
+  intakeEveryTicks: number;
   step: number;
   targetFlights: number | null;
 };
@@ -155,6 +157,10 @@ type SimulatorState = {
   lastPositionByDroneId: Map<string, CoordsDTO>;
   lastSentTelemetryByDroneId: Map<string, DroneStatusDTO>;
   knownDroneIds: Set<string>;
+};
+
+type IntakeTask = {
+  tick: number;
 };
 
 const orderTypeCycle: Array<z.infer<typeof orderTypeSchema>> = [
@@ -238,6 +244,11 @@ function buildConfig(): SimulatorConfig {
     defaultIntervalMs,
     '--interval-ms',
   );
+  const intakeEveryTicks = parseNumberArg(
+    parseOptionalArg('--intake-every-ticks', args),
+    defaultIntakeEveryTicks,
+    '--intake-every-ticks',
+  );
   const step = parseNumberArg(parseOptionalArg('--step', args), defaultStep, '--step');
   const targetFlights = parseTargetFlightsArg(parseOptionalArg('--target-flights', args));
 
@@ -246,6 +257,7 @@ function buildConfig(): SimulatorConfig {
     apiKey,
     baseUrl,
     intervalMs,
+    intakeEveryTicks,
     step,
     targetFlights,
   };
@@ -253,7 +265,7 @@ function buildConfig(): SimulatorConfig {
 
 function printUsage(): void {
   console.log(
-    'Użycie: pnpm simulate -- --api-key <KLUCZ> [--mode <telemetry-only|full-flow>] [--base-url <URL>] [--interval-ms <MS>] [--step <WARTOŚĆ>] [--target-flights <N|all>]',
+    'Użycie: pnpm simulate -- --api-key <KLUCZ> [--mode <telemetry-only|full-flow>] [--base-url <URL>] [--interval-ms <MS>] [--intake-every-ticks <N>] [--step <WARTOŚĆ>] [--target-flights <N|all>]',
   );
 }
 
@@ -426,17 +438,18 @@ async function createIntakeOrder(
   state: SimulatorState,
   destination: CoordsDTO,
   landingPadId: string,
+  tick: number,
 ): Promise<OrderDTO> {
-  const type = orderTypeCycle[state.tick % orderTypeCycle.length];
+  const type = orderTypeCycle[tick % orderTypeCycle.length];
 
   const response = await requestWithAuth(config, '/api/drone-provider/orders/intake', {
     method: 'POST',
     body: JSON.stringify({
       landingPadId,
       type,
-      weight: 0.5 + (state.tick % 5) * 0.4,
+      weight: 0.5 + (tick % 5) * 0.4,
       destination,
-      description: `Symulowane zamówienie #${state.tick + 1}`,
+      description: `Symulowane zamówienie #${tick + 1}`,
     }),
   });
   const parsed = await parseOkJson(response, intakeResponseSchema, '/orders/intake');
@@ -657,128 +670,21 @@ async function runTelemetryOnlyIteration(
   }
 }
 
-async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorState): Promise<void> {
+async function runFullFlowTelemetryIteration(
+  config: SimulatorConfig,
+  state: SimulatorState,
+): Promise<void> {
   const [currentShipments, currentDrones] = await Promise.all([
     fetchShipmentsReady(config),
     fetchDrones(config),
   ]);
-  const createdShipments: ShipmentDTO[] = [];
-
   for (const shipment of currentShipments) {
     state.knownDroneIds.add(shipment.delivery.droneId);
   }
 
-  for (const drone of currentDrones) {
-    state.knownDroneIds.add(drone.droneId);
-  }
-
-  const targetFlights = config.targetFlights ?? state.knownDroneIds.size;
-  const busyDroneIds = new Set(currentShipments.map((shipment) => shipment.delivery.droneId));
-  const freeDroneIds = Array.from(state.knownDroneIds).filter(
-    (droneId) => !busyDroneIds.has(droneId),
-  );
-  const missingFlights = Math.max(0, targetFlights - currentShipments.length);
-
-  if (missingFlights > 0 && freeDroneIds.length > 0) {
-    try {
-      const nearbyPads = await findNearbyLandingPads(config, {
-        lat: krakowCenterLat,
-        lng: krakowCenterLng,
-      });
-
-      if (nearbyPads.length === 0) {
-        console.log('[Simulator] Brak lądowisk w zasięgu symulacji.');
-      } else if (nearbyPads.length < 2) {
-        console.log('[Simulator] Za mało lądowisk, żeby wyznaczyć osobny start i cel lotu.');
-      } else {
-        let createdFlights = 0;
-        const createLimit = Math.min(missingFlights, freeDroneIds.length);
-
-        for (let i = 0; i < createLimit; i += 1) {
-          const droneId = freeDroneIds[i];
-          const preferredStartPadId = state.lastLandingPadIdByDroneId.get(droneId);
-
-          if (
-            preferredStartPadId &&
-            !nearbyPads.some((landingPad) => landingPad.id === preferredStartPadId)
-          ) {
-            console.log(
-              `[Simulator] Pomijam tworzenie lotu dla drona ${droneId}, bo ostatnie lądowisko ${preferredStartPadId} nie jest dostępne w aktualnym obszarze symulacji.`,
-            );
-            continue;
-          }
-
-          const preferredStartPad = preferredStartPadId
-            ? (nearbyPads.find((landingPad) => landingPad.id === preferredStartPadId) ?? null)
-            : null;
-          const fallbackStartPad = nearbyPads[(state.tick + i) % nearbyPads.length] ?? null;
-          const selectedPad = preferredStartPad ?? fallbackStartPad;
-
-          if (!selectedPad) {
-            console.log('[Simulator] Brak lądowiska startowego dla nowego zlecenia.');
-            continue;
-          }
-
-          const destinationPad = pickDestinationPad(nearbyPads, selectedPad.id, state.tick + i + 1);
-
-          if (!destinationPad) {
-            console.log('[Simulator] Brak lądowiska docelowego różnego od startowego.');
-            continue;
-          }
-
-          const destination = destinationPad.coords;
-
-          state.originByLandingPadId.set(selectedPad.id, selectedPad.coords);
-
-          const order = await createIntakeOrder(config, state, destination, selectedPad.id);
-          const delivery = await createReservation(config, order.orderId, droneId);
-
-          if (!delivery) {
-            console.log(
-              `[Simulator] Pomijam lot dla zamówienia ${order.orderId}, bo lądowisko ${selectedPad.id} zostało zajęte (409).`,
-            );
-            continue;
-          }
-
-          createdShipments.push({
-            delivery,
-            order,
-          });
-          const preferredOrigin = state.originByLandingPadId.get(order.landingPadId);
-          const fallbackOrigin = selectedPad.coords;
-
-          state.activeFlightsByDeliveryId.set(delivery.id, {
-            deliveryId: delivery.id,
-            orderId: order.orderId,
-            droneId: delivery.droneId,
-            landingPadId: order.landingPadId,
-            destinationLandingPadId: destinationPad.id,
-            currentPosition: preferredOrigin ?? fallbackOrigin,
-            origin: preferredOrigin ?? fallbackOrigin,
-            destination: order.destination,
-            batteryLevel: 100,
-          });
-
-          createdFlights += 1;
-
-          console.log(
-            `[Simulator] Utworzono rezerwację dla zamówienia ${order.orderId} dronem ${delivery.droneId} z ${order.landingPadId} do ${destinationPad.id}.`,
-          );
-        }
-
-        if (createdFlights > 0) {
-          console.log(`[Simulator] Utworzono ${createdFlights} nowych lotów w tym ticku.`);
-        }
-      }
-    } catch (error) {
-      console.error('[Simulator] Błąd w scenariuszu intake/reservation:', error);
-    }
-  }
-
-  const shipments = [...currentShipments, ...createdShipments];
   const drones = currentDrones;
   const droneByOrderId = new Map(drones.map((drone) => [drone.orderId, drone]));
-  const activeDeliveryIds = new Set(shipments.map((shipment) => shipment.delivery.id));
+  const shipments = currentShipments;
 
   const plannedFlights = shipments.map((shipment) => {
     const existingFlight = state.activeFlightsByDeliveryId.get(shipment.delivery.id);
@@ -908,15 +814,183 @@ async function runFullFlowIteration(config: SimulatorConfig, state: SimulatorSta
     }
   }
 
-  for (const deliveryId of Array.from(state.activeFlightsByDeliveryId.keys())) {
-    if (!activeDeliveryIds.has(deliveryId)) {
-      state.activeFlightsByDeliveryId.delete(deliveryId);
-    }
-  }
-
   console.log(
     `[Simulator] Tick ${state.tick}: aktywne loty ${state.activeFlightsByDeliveryId.size}, przesyłki gotowe ${shipments.length}`,
   );
+}
+
+async function runFullFlowIntakeIteration(
+  config: SimulatorConfig,
+  state: SimulatorState,
+  scheduledTick: number,
+): Promise<void> {
+  const [currentShipments, currentDrones] = await Promise.all([
+    fetchShipmentsReady(config),
+    fetchDrones(config),
+  ]);
+
+  for (const shipment of currentShipments) {
+    state.knownDroneIds.add(shipment.delivery.droneId);
+  }
+
+  for (const drone of currentDrones) {
+    state.knownDroneIds.add(drone.droneId);
+  }
+
+  const targetFlights = config.targetFlights ?? state.knownDroneIds.size;
+  const busyDroneIds = new Set(currentShipments.map((shipment) => shipment.delivery.droneId));
+  const freeDroneIds = Array.from(state.knownDroneIds).filter(
+    (droneId) => !busyDroneIds.has(droneId),
+  );
+  const missingFlights = Math.max(0, targetFlights - currentShipments.length);
+
+  if (missingFlights === 0 || freeDroneIds.length === 0) {
+    return;
+  }
+
+  try {
+    const nearbyPads = await findNearbyLandingPads(config, {
+      lat: krakowCenterLat,
+      lng: krakowCenterLng,
+    });
+
+    if (nearbyPads.length === 0) {
+      console.log('[Simulator] Brak lądowisk w zasięgu symulacji.');
+      return;
+    }
+
+    if (nearbyPads.length < 2) {
+      console.log('[Simulator] Za mało lądowisk, żeby wyznaczyć osobny start i cel lotu.');
+      return;
+    }
+
+    let createdFlights = 0;
+    const createLimit = Math.min(missingFlights, freeDroneIds.length);
+
+    for (let i = 0; i < createLimit; i += 1) {
+      const droneId = freeDroneIds[i];
+      const preferredStartPadId = state.lastLandingPadIdByDroneId.get(droneId);
+
+      if (
+        preferredStartPadId &&
+        !nearbyPads.some((landingPad) => landingPad.id === preferredStartPadId)
+      ) {
+        console.log(
+          `[Simulator] Pomijam tworzenie lotu dla drona ${droneId}, bo ostatnie lądowisko ${preferredStartPadId} nie jest dostępne w aktualnym obszarze symulacji.`,
+        );
+        continue;
+      }
+
+      const preferredStartPad = preferredStartPadId
+        ? (nearbyPads.find((landingPad) => landingPad.id === preferredStartPadId) ?? null)
+        : null;
+      const fallbackStartPad = nearbyPads[(scheduledTick + i) % nearbyPads.length] ?? null;
+      const selectedPad = preferredStartPad ?? fallbackStartPad;
+
+      if (!selectedPad) {
+        console.log('[Simulator] Brak lądowiska startowego dla nowego zlecenia.');
+        continue;
+      }
+
+      const destinationPad = pickDestinationPad(nearbyPads, selectedPad.id, scheduledTick + i + 1);
+
+      if (!destinationPad) {
+        console.log('[Simulator] Brak lądowiska docelowego różnego od startowego.');
+        continue;
+      }
+
+      const destination = destinationPad.coords;
+
+      state.originByLandingPadId.set(selectedPad.id, selectedPad.coords);
+
+      const order = await createIntakeOrder(
+        config,
+        state,
+        destination,
+        selectedPad.id,
+        scheduledTick,
+      );
+      const delivery = await createReservation(config, order.orderId, droneId);
+
+      if (!delivery) {
+        console.log(
+          `[Simulator] Pomijam lot dla zamówienia ${order.orderId}, bo lądowisko ${selectedPad.id} zostało zajęte (409).`,
+        );
+        continue;
+      }
+
+      const preferredOrigin = state.originByLandingPadId.get(order.landingPadId);
+      const fallbackOrigin = selectedPad.coords;
+
+      state.activeFlightsByDeliveryId.set(delivery.id, {
+        deliveryId: delivery.id,
+        orderId: order.orderId,
+        droneId: delivery.droneId,
+        landingPadId: order.landingPadId,
+        destinationLandingPadId: destinationPad.id,
+        currentPosition: preferredOrigin ?? fallbackOrigin,
+        origin: preferredOrigin ?? fallbackOrigin,
+        destination: order.destination,
+        batteryLevel: 100,
+      });
+
+      createdFlights += 1;
+
+      console.log(
+        `[Simulator] Utworzono rezerwację dla zamówienia ${order.orderId} dronem ${delivery.droneId} z ${order.landingPadId} do ${destinationPad.id}.`,
+      );
+    }
+
+    if (createdFlights > 0) {
+      console.log(`[Simulator] Utworzono ${createdFlights} nowych lotów w tym ticku.`);
+    }
+  } catch (error) {
+    console.error('[Simulator] Błąd w scenariuszu intake/reservation:', error);
+  }
+}
+
+let isIntakeRunning = false;
+const pendingIntakeTasks: IntakeTask[] = [];
+
+function scheduleFullFlowIntake(
+  config: SimulatorConfig,
+  state: SimulatorState,
+  tick: number,
+): void {
+  pendingIntakeTasks.push({ tick });
+
+  if (isIntakeRunning) {
+    return;
+  }
+
+  isIntakeRunning = true;
+  void processPendingIntakeTasks(config, state);
+}
+
+async function processPendingIntakeTasks(
+  config: SimulatorConfig,
+  state: SimulatorState,
+): Promise<void> {
+  try {
+    while (pendingIntakeTasks.length > 0) {
+      const task = pendingIntakeTasks.shift();
+
+      if (!task) {
+        continue;
+      }
+
+      await runFullFlowIntakeIteration(config, state, task.tick);
+    }
+  } catch (error) {
+    console.error('[Simulator] Błąd background intake:', error);
+  } finally {
+    isIntakeRunning = false;
+
+    if (pendingIntakeTasks.length > 0) {
+      isIntakeRunning = true;
+      void processPendingIntakeTasks(config, state);
+    }
+  }
 }
 
 async function runIteration(config: SimulatorConfig, state: SimulatorState): Promise<void> {
@@ -940,7 +1014,13 @@ async function executeTick(config: SimulatorConfig, state: SimulatorState): Prom
 
   try {
     if (config.mode === 'full-flow') {
-      await runFullFlowIteration(config, state);
+      await runFullFlowTelemetryIteration(config, state);
+
+      const shouldRunIntake = state.tick % config.intakeEveryTicks === 0;
+
+      if (shouldRunIntake) {
+        scheduleFullFlowIntake(config, state, state.tick);
+      }
     } else {
       await runIteration(config, state);
     }
