@@ -4,3 +4,4 @@ export * from './landingPad';
 export * from './order';
 export * from './droneStatus';
 export * from './delivery';
+export * from './companyApiKey';

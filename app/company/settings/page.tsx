@@ -13,7 +13,7 @@ import { UserRole } from '@prisma/client';
 import { useSession } from 'next-auth/react';
 import { CopyIcon, EyeIcon, EyeSlashIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react';
 import { toast } from 'sonner';
-import type { CreatedCompanyApiKeyDTO } from '@/types/dtos/companyApiKey';
+import type { CompanyApiKeyDTO, CreatedCompanyApiKeyDTO } from '@/types/dtos/companyApiKey';
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('pl-PL', {
@@ -50,7 +50,7 @@ export default function CompanySettingsPage() {
   const [secretValues, setSecretValues] = useState<Record<string, string>>({});
   const [keyToDelete, setKeyToDelete] = useState<string | null>(null);
 
-  const apiKeys = apiKeysQuery.data ?? [];
+  const apiKeys: CompanyApiKeyDTO[] = apiKeysQuery.data ?? [];
 
   const currentSecretById = useMemo(() => {
     const map = new Map<string, string>();
