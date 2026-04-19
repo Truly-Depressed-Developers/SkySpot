@@ -113,9 +113,9 @@ export function MapBottomSheet({ selectedMarker, onClose }: Props) {
                   <h3 className="text-xl font-semibold">{selectedMarker.pad.name}</h3>
                   <p className="text-sm text-muted-foreground">Typ: {typeLabels[selectedMarker.pad.type]}</p>
                 </div>
-                <Badge className={statusColorByLandingPadStatus[selectedMarker.pad.status]}>
+                {/* <Badge className={statusColorByLandingPadStatus[selectedMarker.pad.status]}>
                   {statusLabelByLandingPadStatus[selectedMarker.pad.status]}
-                </Badge>
+                </Badge> */}
               </div>
 
               <p className="text-sm text-muted-foreground">{selectedMarker.pad.description || 'Brak opisu.'}</p>

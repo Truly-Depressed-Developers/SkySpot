@@ -43,7 +43,8 @@ function MapAutoZoom({ target }: MapAutoZoomProps) {
 
 export default function MapPage() {
   const [selectedMarker, setSelectedMarker] = useState<SelectedMarker>(null);
-  const { data: landingPads, isLoading: isLoadingPads } = trpc.landingPad.getAll.useQuery();
+  const { data: landingPads1, isLoading: isLoadingPads } = trpc.landingPad.getAll.useQuery();
+  const landingPads = landingPads1?.filter(pad => pad.status === 'ACCEPTED');
   const { data: drones, isLoading: isLoadingDrones } = trpc.droneStatus.getAllMine.useQuery(undefined, {
     refetchInterval: DRONE_MAP_REFETCH_INTERVAL_MS,
     refetchIntervalInBackground: true,
