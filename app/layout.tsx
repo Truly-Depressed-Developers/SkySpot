@@ -21,8 +21,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Hacknarök 2026',
-  description: 'Hacknarök 2026',
+  title: 'SkySpot',
+  description: 'SkySpot',
 };
 
 export default function RootLayout({

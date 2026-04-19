@@ -10,6 +10,12 @@ import { Button } from '@/components/ui/button';
 import { signOut, useSession } from 'next-auth/react';
 import { PageHeader } from '@/components/PageHeader';
 
+const roleLabelByRole: Record<UserRole, string> = {
+  [UserRole.USER]: 'Użytkownik',
+  [UserRole.MODERATOR]: 'Moderator',
+  [UserRole.DRONE_PROVIDER]: 'Dostawca dronów',
+};
+
 export default function ProfilePage() {
   const { data: session } = useSession();
   const isDroneProvider = session?.user?.role === UserRole.DRONE_PROVIDER;
@@ -52,9 +58,9 @@ export default function ProfilePage() {
             <span className="text-sm text-muted-foreground">
               {session.user.firstName} {session.user.lastName}
             </span>
-            <span className="text-sm text-muted-foreground">Rola: {session.user.role}</span>
+            <span className="text-sm text-muted-foreground">Rola: {roleLabelByRole[session.user.role]}</span>
             <Button variant="destructive" size="sm" onClick={() => signOut({ callbackUrl: '/' })}>
-              Logout
+              Wyloguj
             </Button>
           </div>
         )}
